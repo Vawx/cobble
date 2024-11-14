@@ -59,7 +59,7 @@ static void view_update(cobble_view *view, vec2 screen_size) {
     glm_lookat(view->pos, forward_pos, (vec3){0.f, 1.f, 0.f}, view->view);
 }
 
-static void view_frame(vec2 screen_size, vs_display_params_t *params) {
+static void view_frame(vec2 screen_size, mat4 *out_view_projection) {
     if(view_current && view_current->is_input_commanded) {
         view_update(view_current, screen_size);
         
@@ -133,13 +133,13 @@ static void view_frame(vec2 screen_size, vs_display_params_t *params) {
             } else {
                 obj = jolt_make_dynamic_sphere(1.f, V3(10-randx, 10-randy, 10-randz), 1);
             }
-            shapes_push_desc(&(render_shape_description) {
+            /*shapes_push_desc(&(render_shape_description) {
                                  .color = V4(1.f, 0.25, 0.3f, 1.f),
                                  .shape_type = shape_r > 50 ? RENDER_SHAPES_BOX : RENDER_SHAPES_SPHERE,
                                  .desc_type = RENDER_SHAPE_DESC_TYPE_COLORED,
                                  .shape_movement = RENDER_SHAPES_MOVEMENT_DYNAMIC,
                                  .id = obj.id
-                             });
+                             });*/
         }
         x += 1;
         // keep view from "flipping"
@@ -159,24 +159,24 @@ static void view_frame(vec2 screen_size, vs_display_params_t *params) {
         mat4 mvp = {0};
         glm_mat4_mul(pv, model, mvp);
         
-        params->mvp[0] = mvp[0][0];
-        params->mvp[1] = mvp[0][1];
-        params->mvp[2] = mvp[0][2];
-        params->mvp[3] = mvp[0][3];
+        *out_view_projection[0][0] = mvp[0][0];
+        *out_view_projection[0][1] = mvp[0][1];
+        *out_view_projection[0][2] = mvp[0][2];
+        *out_view_projection[0][3] = mvp[0][3];
         
-        params->mvp[4] = mvp[1][0];
-        params->mvp[5] = mvp[1][1];
-        params->mvp[6] = mvp[1][2];
-        params->mvp[7] = mvp[1][3];
+        *out_view_projection[1][0] = mvp[1][0];
+        *out_view_projection[1][1] = mvp[1][1];
+        *out_view_projection[1][2] = mvp[1][2];
+        *out_view_projection[1][3] = mvp[1][3];
         
-        params->mvp[8] = mvp[2][0];
-        params->mvp[9] = mvp[2][1];
-        params->mvp[10] = mvp[2][2];
-        params->mvp[11] = mvp[2][3];
+        *out_view_projection[2][0] = mvp[2][0];
+        *out_view_projection[2][1] = mvp[2][1];
+        *out_view_projection[2][2] = mvp[2][2];
+        *out_view_projection[2][3] = mvp[2][3];
         
-        params->mvp[12] = mvp[3][0];
-        params->mvp[13] = mvp[3][1];
-        params->mvp[14] = mvp[3][2];
-        params->mvp[15] = mvp[3][3];
+        *out_view_projection[3][0] = mvp[3][0];
+        *out_view_projection[3][1] = mvp[3][1];
+        *out_view_projection[3][2] = mvp[3][2];
+        *out_view_projection[3][3] = mvp[3][3];
     }
 }

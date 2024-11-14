@@ -11,8 +11,8 @@
 static void core_input_callback(sapp_event *event); // used by external systems for input, like IMGUI
 #include "util/cobble_input.h"
 
-#include "cobble_render.h"
-#include "cobble_render.c"
+#include "render/cobble_gfx.h"
+#include "render/cobble_gfx.c"
 
 typedef struct cobble_time {
     r64 delta;
@@ -31,18 +31,19 @@ static void core_init(void) {
              });
     
     printf("[cobble]: initializing root directory %s\n", root_dir.ptr);
-    render_init();
+    
+    gfx_init();
     
     jolt_init();
     jolt_make_dynamic_box(V3(100, 1, 100), V3(0.f, -1, 0), NOT_MOVING);
-    shapes_push_desc(&(render_shape_description) {
-                         .color = V4(0.3f, 0.3f, 0.3f, 1.f),
-                         .shape_type = RENDER_SHAPES_BOX,
-                         .desc_type = RENDER_SHAPE_DESC_TYPE_COLORED,
-                         .shape_movement = RENDER_SHAPES_MOVEMENT_STATIC,
+    shapes_push_desc(&(shape_description) {
+                         .color = V4(1.f, 1.f, 1.f, 1.f),
+                         .shape_type = SPHERE,
+                         .desc_type = SHAPE_DESC_TYPE_COLORED,
+                         .shape_movement = SHAPE_MOVEMENT_STATIC,
                          .pos = V3(0.f, -0.5f, 0.f),
                          .rot = V3d(0.f),
-                         .scale = V3(100, 1, 100)
+                         .scale = V3(3, 3, 3)
                      });
     
 #if _WIN32
@@ -80,20 +81,20 @@ static void core_frame(void) {
     
     vec2 screen_size = {sapp_widthf(), sapp_heightf()};
     
-    vs_display_params_t params;
-    view_frame(screen_size, &params);
-    render_frame(&params);
+    static mat4 view_projection = {0};
+    view_frame(screen_size, &view_projection);
+    gfx_frame();
+    
     input_frame();
     
     u64 end = performance_counter();
     time.delta = (r64)(end - start) / (r64)time.freq;
     time.seconds += time.delta;
     ++time.ticks;
-    
 }
 
 void core_cleanup(void) {
-    render_close();
+    gfx_end();
     sg_shutdown();
 }
 

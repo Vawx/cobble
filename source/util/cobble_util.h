@@ -238,5 +238,7 @@ static m4 M4d(r32 d) {
 #define jph_vec3_from_v3(in) ((JPH_Vec3){in.elements[0], in.elements[1], in.elements[2]})
 #define jph_vec4_from_v4(in) ((JPH_Vec4){in.elements[0], in.elements[1], in.elements[2], in.elements[3]})
 
+#define MAT4(p_mat_value) mat4 (p_mat_value) = {0}; glm_mat4_identity((p_mat_value))
+
 #define COBBLE_UTIL_H
 #endif //COBBLE_UTIL_H

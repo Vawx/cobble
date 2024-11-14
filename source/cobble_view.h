@@ -28,7 +28,7 @@ static void view_set_current(cobble_view *view);
 static void view_set_current_idx(u8 idx);
 static cobble_view *view_get(u8 idx);
 static void view_update(cobble_view *view, vec2 screen_size);
-static void view_frame(vec2 screen_size, vs_display_params_t *params);
+static void view_frame(vec2 screen_size, mat4 *out_view_projection);
 
 #define COBBLE_VIEW_H
 #endif //COBBLE_VIEW_H
