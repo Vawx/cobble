@@ -36,6 +36,7 @@ static void core_init(void) {
     
     jolt_init();
     jolt_make_dynamic_box(V3(100, 1, 100), V3(0.f, -1, 0), NOT_MOVING);
+#if 0
     shapes_push_desc(&(shape_description) {
                          .color = V4(1.f, 1.f, 1.f, 1.f),
                          .shape_type = SPHERE,
@@ -45,6 +46,7 @@ static void core_init(void) {
                          .rot = V3d(0.f),
                          .scale = V3(3, 3, 3)
                      });
+#endif
     
 #if _WIN32
     LARGE_INTEGER ii;
@@ -82,7 +84,7 @@ static void core_frame(void) {
     vec2 screen_size = {sapp_widthf(), sapp_heightf()};
     
     static mat4 view_projection = {0};
-    view_frame(screen_size, &view_projection);
+    //view_frame(screen_size, &view_projection);
     gfx_frame();
     
     input_frame();
