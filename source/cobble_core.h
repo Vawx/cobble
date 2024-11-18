@@ -33,6 +33,7 @@ static void core_init(void) {
     printf("[cobble]: initializing root directory %s\n", root_dir.ptr);
     
     gfx_init();
+    imgui_init();
     
     jolt_init();
     jolt_make_dynamic_box(V3(100, 1, 100), V3(0.f, -1, 0), NOT_MOVING);
@@ -54,7 +55,6 @@ static void core_init(void) {
     time.freq = ii.QuadPart;
 #endif
     
-    imgui_init();
     
     //shapes_test();
     sfetch_setup(&(sfetch_desc_t){
@@ -81,10 +81,6 @@ static void core_frame(void) {
     
     jolt_step(time.delta);
     
-    vec2 screen_size = {sapp_widthf(), sapp_heightf()};
-    
-    static mat4 view_projection = {0};
-    //view_frame(screen_size, &view_projection);
     gfx_frame();
     
     input_frame();

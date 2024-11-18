@@ -2,12 +2,17 @@
 ./sokol-shdc --input shd.glsl --output shd.h --slang glsl430:hlsl5:metal_macos
 */
 
+#pragma warning(disable: 4090) // C4090: 'function': different 'const' qualifiers
+
 #define SOKOL_IMPL
 #if _WIN32
 #define SOKOL_D3D11
 #else 
 #define SOKOL_GLCORE
 #endif
+
+#define HANDMADE_MATH_NO_SIMD
+#include "handmade_math/HandmadeMath.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui/cimgui.h"

@@ -153,30 +153,6 @@ static void view_frame(vec2 screen_size, mat4 *out_view_projection) {
         mat4 pv = {0};
         glm_mat4_mul(perspective, view, pv);
         
-        mat4 model = {0};
-        glm_mat4_identity(model);
-        
-        mat4 mvp = {0};
-        glm_mat4_mul(pv, model, mvp);
-        
-        *out_view_projection[0][0] = mvp[0][0];
-        *out_view_projection[0][1] = mvp[0][1];
-        *out_view_projection[0][2] = mvp[0][2];
-        *out_view_projection[0][3] = mvp[0][3];
-        
-        *out_view_projection[1][0] = mvp[1][0];
-        *out_view_projection[1][1] = mvp[1][1];
-        *out_view_projection[1][2] = mvp[1][2];
-        *out_view_projection[1][3] = mvp[1][3];
-        
-        *out_view_projection[2][0] = mvp[2][0];
-        *out_view_projection[2][1] = mvp[2][1];
-        *out_view_projection[2][2] = mvp[2][2];
-        *out_view_projection[2][3] = mvp[2][3];
-        
-        *out_view_projection[3][0] = mvp[3][0];
-        *out_view_projection[3][1] = mvp[3][1];
-        *out_view_projection[3][2] = mvp[3][2];
-        *out_view_projection[3][3] = mvp[3][3];
+        glm_mat4_copy(pv, *out_view_projection);
     }
 }

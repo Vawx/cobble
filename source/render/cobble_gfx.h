@@ -1,35 +1,35 @@
 /* cobble_gfx.h : date = November 13th 2024 5:28 pm */
 
 #if !defined(COBBLE_GFX_H)
+#include "cobble_shader.h"
 #include "cobble_render_imgui.h"
+#include "sokol/util/sokol_shape.h"
 
-typedef union gfx_vertex {
-    r32 x, y, z;
-    r32 xn, yn, zn;
-    u16 u, v;
-} gfx_vertex;
+#include "cobble_view.h"
 
-typedef struct gfx_state {
-    sg_buffer vbuf;
-    sg_buffer ibuf;
+static struct {
     sg_image shadow_map;
     sg_sampler shadow_sampler;
+    sg_buffer vbuf;
+    sg_buffer ibuf;
+    float ry;
     struct {
-        sg_pass_action action;
-        sg_pipeline pipeline;
-        sg_bindings bindings;
-        sg_image diffuse_map;
-        sg_sampler diffuse_sampler;
+        sg_pass_action pass_action;
+        sg_attachments atts;
+        sg_pipeline pip;
+        sg_bindings bind;
+    } shadow;
+    struct {
+        sg_pass_action pass_action;
+        sg_pipeline pip;
+        sg_bindings bind;
     } display;
     struct {
-        sg_bindings bindings;
-        sg_pass_action action;
-        sg_pipeline pipeline;
-        sg_attachments attachments;
-    } shadow;
-} gfx_state;
+        sg_pipeline pip;
+        sg_bindings bind;
+    } dbg;
+} state;
 
-static gfx_state *get_gfx();
 static void gfx_init();
 static void gfx_frame();
 static void gfx_end();
