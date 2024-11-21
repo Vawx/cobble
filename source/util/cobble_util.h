@@ -8,6 +8,8 @@
 #define SOKOL_FETCH_IMPL
 #include "sokol_fetch.h"
 
+#define c_min(a, b) (a) < (b) ? (a) : (b)
+#define c_max(a, b) (b) < (a) ? (a) : (b)
 #define clamp(v, min, max) (v) < (min) ? (min) : (v); (v) > (max) ? (max) : (v);
 
 #define DIRECTORY_MAX_LEN 255
@@ -239,6 +241,11 @@ static m4 M4d(r32 d) {
 #define jph_vec4_from_v4(in) ((JPH_Vec4){in.elements[0], in.elements[1], in.elements[2], in.elements[3]})
 
 #define MAT4(p_mat_value) mat4 (p_mat_value) = {0}; glm_mat4_identity((p_mat_value))
+
+#define V4_to_V3(val) (vec3){val[0], val[1], val[2]}
+
+#define vec3_min(a, b) (vec3){c_min(a[0], b[0]), c_min(a[1], b[1]), c_min(a[2], b[2])}
+#define vec3_max(a, b) (vec3){c_max(a[0], b[0]), c_max(a[1], b[1]), c_max(a[2], b[2])}
 
 #define COBBLE_UTIL_H
 #endif //COBBLE_UTIL_H

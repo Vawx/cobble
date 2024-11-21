@@ -1,18 +1,19 @@
 /** sokol SHDC:
-./sokol-shdc --input shd.glsl --output shd.h --slang glsl430:hlsl5:metal_macos
+./sokol-shdc --input ../../../../content/shader/cobble_shader.glsl --output ../../../../source/shader/cobble_shader.h --slang glsl430:hlsl5:metal_macos
 */
 
 #pragma warning(disable: 4090) // C4090: 'function': different 'const' qualifiers
 
 #define SOKOL_IMPL
-#if _WIN32
+#if defined(__APPLE__)
+#define SOKOL_METAL
+#elif defined(_WIN32)
 #define SOKOL_D3D11
-#else 
-#define SOKOL_GLCORE
+#elif defined(__EMSCRIPTEN__)
+#define SOKOL_GLES2
+#else
+#define SOKOL_GLCORE33
 #endif
-
-#define HANDMADE_MATH_NO_SIMD
-#include "handmade_math/HandmadeMath.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui/cimgui.h"

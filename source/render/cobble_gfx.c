@@ -1,296 +1,400 @@
-/**
-NOTES:
+#include "cobble_shader.h"
 
-This is cobbled together using examples from sokol git: https://floooh.github.io/sokol-html5/index.html
+static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.png";
+static gfx_handle default_texture_handle;
 
-As for the order of initialization: I have no clue if the order matters, though it _feels_ like it does.
-*/
-static void gfx_init() {
-    // vertex buffer for a cube and plane
-    const float scene_vertices[] = {
-        // pos                  normals
-        -1.0f, -1.0f, -1.0f,    0.0f, 0.0f, -1.0f,  //CUBE BACK FACE
-        1.0f, -1.0f, -1.0f,    0.0f, 0.0f, -1.0f,
-        1.0f,  1.0f, -1.0f,    0.0f, 0.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,    0.0f, 0.0f, -1.0f,
+#define ufbx_to_vec2(v) (vec2){v.x, v.y}
+#define ufbx_to_vec3(v) (vec3){v.x, v.y, v.z}
+#define ufbx_to_mat4(m) (mat4){m.m00, m.m01, m.m02, m.m03, m.m10, m.m11, m.m12, m.m13, m.m20, m.m21, m.m22, m.m23, 0, 0, 0, 1,}
+
+size_t min_sz(size_t a, size_t b) { return a < b ? a : b; }
+size_t max_sz(size_t a, size_t b) { return b < a ? a : b; }
+size_t clamp_sz(size_t a, size_t min_a, size_t max_a) { return min_sz(max_sz(a, min_a), max_a); }
+
+static const sg_vertex_layout_state mesh_vertex_layout = {
+	.attrs = {
+		{ .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT3 },
+		{ .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT3 },
+		{ .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2 },
+		{ .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT },
+	},
+};
+
+
+static void read_node(gfx_node *gnode, ufbx_node *node) {
+	gnode->parent_index = node->parent ? node->parent->typed_id : -1;
+	glm_mat4_copy(ufbx_to_mat4(node->node_to_parent), gnode->node_to_parent);
+    glm_mat4_copy(ufbx_to_mat4(node->node_to_world), gnode->node_to_world);
+    glm_mat4_copy(ufbx_to_mat4(node->geometry_to_node), gnode->geometry_to_node);
+	glm_mat4_copy(ufbx_to_mat4(node->geometry_to_world), gnode->geometry_to_world);
+	glm_mat4_copy(ufbx_to_mat4(ufbx_matrix_for_normals(&node->geometry_to_world)), gnode->normal_to_world);
+}
+
+static gfx_viewer gfx;
+
+static void read_mesh(gfx_mesh *vmesh, ufbx_mesh *mesh) {
+	// Count the number of needed parts and temporary buffers
+	size_t max_parts = 0;
+	size_t max_triangles = 0;
+    
+	// We need to render each material of the mesh in a separate part, so let's
+	// count the number of parts and maximum number of triangles needed.
+	for (size_t pi = 0; pi < mesh->material_parts.count; pi++) {
+		ufbx_mesh_part *part = &mesh->material_parts.data[pi];
+		if (part->num_triangles == 0) continue;
+		max_parts += 1;
+		max_triangles = max_sz(max_triangles, part->num_triangles);
+	}
+    
+	// Temporary buffers
+	size_t num_tri_indices = mesh->max_face_triangles * 3;
+    u32 *tri_indices = (u32*)c_alloc(sizeof(u32) * num_tri_indices);
+    mesh_vertex *vertices = (mesh_vertex*)c_alloc(sizeof(mesh_vertex) * max_triangles * 3);
+    u32 *indices = (u32*)c_alloc(sizeof(u32) * max_triangles * 3);
+    
+	// Result buffers
+	gfx_mesh_part *parts = (gfx_mesh_part*)c_alloc(sizeof(gfx_mesh_part) * max_parts);
+	size_t num_parts = 0;
+    
+	// In FBX files a single mesh can be instanced by multiple nodes. ufbx handles the connection
+	// in two ways: (1) `ufbx_node.mesh/light/camera/etc` contains pointer to the data "attribute"
+	// that node uses and (2) each element that can be connected to a node contains a list of
+	// `ufbx_node*` instances eg. `ufbx_mesh.instances`.
+	vmesh->num_instances = mesh->instances.count;
+	vmesh->instance_node_indices = (s32*)c_alloc(sizeof(s32) * mesh->instances.count);
+	for (size_t i = 0; i < mesh->instances.count; i++) {
+		vmesh->instance_node_indices[i] = (int32_t)mesh->instances.data[i]->typed_id;
+	}
+    
+	// Our shader supports only a single material per draw call so we need to split the mesh
+	// into parts by material. `ufbx_mesh_part` contains a handy compact list of faces
+	// that use the material which we use here.
+	for (size_t pi = 0; pi < mesh->material_parts.count; pi++) {
+		ufbx_mesh_part *mesh_part = &mesh->material_parts.data[pi];
+		if (mesh_part->num_triangles == 0) continue;
         
-        -1.0f, -1.0f,  1.0f,    0.0f, 0.0f, 1.0f,   //CUBE FRONT FACE
-        1.0f, -1.0f,  1.0f,    0.0f, 0.0f, 1.0f,
-        1.0f,  1.0f,  1.0f,    0.0f, 0.0f, 1.0f,
-        -1.0f,  1.0f,  1.0f,    0.0f, 0.0f, 1.0f,
+		gfx_mesh_part *part = &parts[num_parts++];
+		size_t num_indices = 0;
         
-        -1.0f, -1.0f, -1.0f,    -1.0f, 0.0f, 0.0f,  //CUBE LEFT FACE
-        -1.0f,  1.0f, -1.0f,    -1.0f, 0.0f, 0.0f,
-        -1.0f,  1.0f,  1.0f,    -1.0f, 0.0f, 0.0f,
-        -1.0f, -1.0f,  1.0f,    -1.0f, 0.0f, 0.0f,
+		// First fetch all vertices into a flat non-indexed buffer, we also need to
+		// triangulate the faces
+		for (size_t fi = 0; fi < mesh_part->num_faces; fi++) {
+			ufbx_face face = mesh->faces.data[mesh_part->face_indices.data[fi]];
+			size_t num_tris = ufbx_triangulate_face(tri_indices, num_tri_indices, mesh, face);
+            
+			ufbx_vec2 default_uv = { 0 };
+            
+			// Iterate through every vertex of every triangle in the triangulated result
+			for (size_t vi = 0; vi < num_tris * 3; vi++) {
+				uint32_t ix = tri_indices[vi];
+				mesh_vertex *vert = &vertices[num_indices];
+                
+				ufbx_vec3 pos = ufbx_get_vertex_vec3(&mesh->vertex_position, ix);
+				ufbx_vec3 normal = ufbx_get_vertex_vec3(&mesh->vertex_normal, ix);
+				ufbx_vec2 uv = mesh->vertex_uv.exists ? ufbx_get_vertex_vec2(&mesh->vertex_uv, ix) : default_uv;
+                
+                glm_vec3_copy(ufbx_to_vec3(pos), vert->position);
+                
+                vec3 norm = {0};
+                glm_vec3_copy(ufbx_to_vec3(normal), norm);
+                glm_normalize(norm);
+                glm_vec3_copy(norm, vert->normal);
+                
+                glm_vec2_copy(ufbx_to_vec2(uv), vert->uv);
+				
+                vert->f_vertex_index = (float)mesh->vertex_indices.data[ix];
+                
+				num_indices++;
+			}
+		}
         
-        1.0f, -1.0f, -1.0f,    1.0f, 0.0f, 0.0f,   //CUBE RIGHT FACE
-        1.0f,  1.0f, -1.0f,    1.0f, 0.0f, 0.0f,
-        1.0f,  1.0f,  1.0f,    1.0f, 0.0f, 0.0f,
-        1.0f, -1.0f,  1.0f,    1.0f, 0.0f, 0.0f,
+		ufbx_vertex_stream streams[2];
+		size_t num_streams = 1;
         
-        -1.0f, -1.0f, -1.0f,    0.0f, -1.0f, 0.0f,  //CUBE BOTTOM FACE
-        -1.0f, -1.0f,  1.0f,    0.0f, -1.0f, 0.0f,
-        1.0f, -1.0f,  1.0f,    0.0f, -1.0f, 0.0f,
-        1.0f, -1.0f, -1.0f,    0.0f, -1.0f, 0.0f,
+		streams[0].data = vertices;
+		streams[0].vertex_count = num_indices;
+		streams[0].vertex_size = sizeof(mesh_vertex);
         
-        -1.0f,  1.0f, -1.0f,    0.0f, 1.0f, 0.0f,   //CUBE TOP FACE
-        -1.0f,  1.0f,  1.0f,    0.0f, 1.0f, 0.0f,
-        1.0f,  1.0f,  1.0f,    0.0f, 1.0f, 0.0f,
-        1.0f,  1.0f, -1.0f,    0.0f, 1.0f, 0.0f,
+		// Optimize the flat vertex buffer into an indexed one. `ufbx_generate_indices()`
+		// compacts the vertex buffer and returns the number of used vertices.
+		ufbx_error error;
+		size_t num_vertices = ufbx_generate_indices(streams, num_streams, indices, num_indices, NULL, &error);
+		if (error.type != UFBX_ERROR_NONE) {
+            // "Failed to generate index buffer"
+			c_assert_break();
+		}
         
-        -5.0f,  0.0f, -5.0f,    0.0f, 1.0f, 0.0f,   //PLANE GEOMETRY
-        -5.0f,  0.0f,  5.0f,    0.0f, 1.0f, 0.0f,
-        5.0f,  0.0f,  5.0f,    0.0f, 1.0f, 0.0f,
-        5.0f,  0.0f, -5.0f,    0.0f, 1.0f, 0.0f,
-    };
-    state.vbuf = sg_make_buffer(&(sg_buffer_desc){
-                                    .data = SG_RANGE(scene_vertices),
-                                    .label = "cube-vertices"
-                                });
-    
-    // ...and a matching index buffer for the scene
-    const uint16_t scene_indices[] = {
-        0, 1, 2,  0, 2, 3,
-        6, 5, 4,  7, 6, 4,
-        8, 9, 10,  8, 10, 11,
-        14, 13, 12,  15, 14, 12,
-        16, 17, 18,  16, 18, 19,
-        22, 21, 20,  23, 22, 20,
-        26, 25, 24,  27, 26, 24
-    };
-    state.ibuf = sg_make_buffer(&(sg_buffer_desc){
-                                    .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                    .data = SG_RANGE(scene_indices),
-                                    .label = "cube-indices"
-                                });
-    
-    // shadow map pass action: clear the shadow map to (1,1,1,1)
-    state.shadow.pass_action = (sg_pass_action){
-        .colors[0] = {
-            .load_action = SG_LOADACTION_CLEAR,
-            .clear_value = { 1.0f, 1.0f, 1.0f, 1.0f },
-        }
-    };
-    
-    // display pass action
-    state.display.pass_action = (sg_pass_action){
-        .colors[0] = {
-            .load_action = SG_LOADACTION_CLEAR,
-            .clear_value = { 0.25f, 0.5f, 0.25f, 1.0f}
-        },
-    };
-    
-    // a regular RGBA8 render target image as shadow map
-    state.shadow_map = sg_make_image(&(sg_image_desc){
-                                         .render_target = true,
-                                         .width = 2048,
-                                         .height = 2048,
-                                         .pixel_format = SG_PIXELFORMAT_RGBA8,
-                                         .sample_count = 1,
-                                         .label = "shadow-map",
-                                     });
-    
-    // ...we also need a separate depth-buffer image for the shadow pass
-    sg_image shadow_depth_img = sg_make_image(&(sg_image_desc){
-                                                  .render_target = true,
-                                                  .width = 2048,
-                                                  .height = 2048,
-                                                  .pixel_format = SG_PIXELFORMAT_DEPTH,
-                                                  .sample_count = 1,
-                                                  .label = "shadow-depth-buffer",
-                                              });
-    
-    // a regular sampler with nearest filtering to sample the shadow map
-    state.shadow_sampler = sg_make_sampler(&(sg_sampler_desc){
-                                               .min_filter = SG_FILTER_NEAREST,
-                                               .mag_filter = SG_FILTER_NEAREST,
-                                               .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-                                               .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-                                               .label = "shadow-sampler",
-                                           });
-    
-    // the render pass object for the shadow pass
-    state.shadow.atts = sg_make_attachments(&(sg_attachments_desc){
-                                                .colors[0].image = state.shadow_map,
-                                                .depth_stencil.image = shadow_depth_img,
-                                                .label = "shadow-pass",
+		part->num_indices = num_indices;
+		if (mesh_part->index < mesh->materials.count) {
+			ufbx_material *material =  mesh->materials.data[mesh_part->index];
+			part->material_index = (int32_t)material->typed_id;
+		} else {
+			part->material_index = -1;
+		}
+        
+		// Create the GPU buffers from the temporary `vertices` and `indices` arrays
+		part->index_buffer = sg_make_buffer(&(sg_buffer_desc){
+                                                .size = num_indices * sizeof(uint32_t),
+                                                .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                .data = { indices, num_indices * sizeof(uint32_t) },
                                             });
+		part->vertex_buffer = sg_make_buffer(&(sg_buffer_desc){
+                                                 .size = num_vertices * sizeof(mesh_vertex),
+                                                 .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                 .data = { vertices, num_vertices * sizeof(mesh_vertex) },
+                                             });
+	}
     
-    // a pipeline object for the shadow pass
-    state.shadow.pip = sg_make_pipeline(&(sg_pipeline_desc){
-                                            .layout = {
-                                                // need to provide vertex stride, because normal component is skipped in shadow pass
-                                                .buffers[0].stride = 6 * sizeof(float),
-                                                .attrs = {
-                                                    [ATTR_shadow_pos].format = SG_VERTEXFORMAT_FLOAT3,
-                                                },
-                                            },
-                                            .shader = sg_make_shader(shadow_shader_desc(sg_query_backend())),
-                                            .index_type = SG_INDEXTYPE_UINT16,
-                                            // render back-faces in shadow pass to prevent shadow acne on front-faces
-                                            .cull_mode = SG_CULLMODE_FRONT,
-                                            .sample_count = 1,
-                                            .colors[0].pixel_format = SG_PIXELFORMAT_RGBA8,
-                                            .depth = {
-                                                .pixel_format = SG_PIXELFORMAT_DEPTH,
-                                                .compare = SG_COMPAREFUNC_LESS_EQUAL,
-                                                .write_enabled = true,
-                                            },
-                                            .label = "shadow-pipeline"
-                                        });
+	// Free the temporary buffers
+	c_free((u8*)tri_indices);
+	c_free((u8*)vertices);
+	c_free((u8*)indices);
     
-    // resource bindings to render shadow scene
-    state.shadow.bind = (sg_bindings) {
-        .vertex_buffers[0] = state.vbuf,
-        .index_buffer = state.ibuf,
-    };
+	// Compute bounds from the vertices
+	vmesh->aabb_is_local = mesh->skinned_is_local;
+	glm_vec3_copy((vec3){+INFINITY, +INFINITY, +INFINITY}, vmesh->aabb_min);
+    glm_vec3_copy((vec3){-INFINITY, -INFINITY, -INFINITY}, vmesh->aabb_max);
     
-    // a pipeline object for the display pass
-    state.display.pip = sg_make_pipeline(&(sg_pipeline_desc){
-                                             .layout = {
-                                                 .attrs = {
-                                                     [ATTR_display_pos].format = SG_VERTEXFORMAT_FLOAT3,
-                                                     [ATTR_display_norm].format = SG_VERTEXFORMAT_FLOAT3,
-                                                 }
-                                             },
-                                             .shader = sg_make_shader(display_shader_desc(sg_query_backend())),
-                                             .index_type = SG_INDEXTYPE_UINT16,
-                                             .cull_mode = SG_CULLMODE_BACK,
-                                             .depth = {
-                                                 .compare = SG_COMPAREFUNC_LESS_EQUAL,
-                                                 .write_enabled = true,
-                                             },
-                                             .label = "display-pipeline",
-                                         });
+	for (size_t i = 0; i < mesh->num_vertices; i++) {
+		vec3 pos = {0};
+        glm_vec3_copy(ufbx_to_vec3(mesh->skinned_position.values.data[i]), pos);
+		glm_vec3_copy(vec3_min(vmesh->aabb_min, pos), vmesh->aabb_min);
+        glm_vec3_copy(vec3_max(vmesh->aabb_max, pos), vmesh->aabb_max);
+	}
     
-    // resource bindings to render display scene
-    state.display.bind = (sg_bindings) {
-        .vertex_buffers[0] = state.vbuf,
-        .index_buffer = state.ibuf,
-        .images[IMG_shadow_map] = state.shadow_map,
-        .samplers[SMP_shadow_sampler] = state.shadow_sampler,
-    };
+	vmesh->parts = parts;
+	vmesh->num_parts = num_parts;
+}
+
+static void vec3_transform_point(const mat4 *a, vec3 b, vec3 *r) {
+	r32 a1 = a[0][0][0] * b[0];
+    r32 a2 = a[0][0][1] * b[1];
+    r32 a3 = a[0][0][2] * b[2];
+    r32 a4 = a[0][0][3];
     
-    // a vertex buffer, pipeline and sampler to render a debug visualization of the shadow map
-    float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
-    sg_buffer dbg_vbuf = sg_make_buffer(&(sg_buffer_desc){
-                                            .data = SG_RANGE(dbg_vertices),
-                                            .label = "debug-vertices"
-                                        });
-    state.dbg.pip = sg_make_pipeline(&(sg_pipeline_desc){
-                                         .layout = {
-                                             .attrs[ATTR_dbg_pos].format = SG_VERTEXFORMAT_FLOAT2,
-                                         },
-                                         .shader = sg_make_shader(dbg_shader_desc(sg_query_backend())),
-                                         .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
-                                         .label = "debug-pipeline",
-                                     });
-    sg_sampler dbg_smp = sg_make_sampler(&(sg_sampler_desc){
-                                             .min_filter = SG_FILTER_NEAREST,
-                                             .mag_filter = SG_FILTER_NEAREST,
-                                             .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-                                             .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-                                             .label = "debug-sampler"
-                                         });
-    state.dbg.bind = (sg_bindings){
-        .vertex_buffers[0] = dbg_vbuf,
-        .images[IMG_dbg_tex] = state.shadow_map,
-        .samplers[SMP_dbg_smp] = dbg_smp,
-    };
+    r32 b1 = a[0][1][0] * b[0];
+    r32 b2 = a[0][1][1] * b[1];
+    r32 b3 = a[0][1][2] * b[2];
+    r32 b4 = a[0][1][3];
     
-    view_make_new((vec3){0.f, 5.f, 0.f}, (vec3){0.f, 0.f, -1.f}, 0.f, 0.f, 1);
+    r32 c1 = a[0][2][0] * b[0];
+    r32 c2 = a[0][2][1] * b[1];
+    r32 c3 = a[0][2][2] * b[2];
+    r32 c4 = a[0][2][3];
+    
+    r[0][0] = a1 + a1 + a3 + a4;
+    r[0][1] = b1 + b2 + b3 + b4;
+    r[0][2] = c1 + c2 + c3 + c4;
+}
+
+static void vec3_transform_extent(const mat4 *a, vec3 b, vec3 *r) {
+	r32 a1 = abs(a[0][0][0]) * b[0];
+    r32 a2 = abs(a[0][0][1]) * b[1];
+    r32 a3 = abs(a[0][0][2]) * b[2];
+    
+    r32 b1 = abs(a[0][1][0]) * b[0];
+    r32 b2 = abs(a[0][1][1]) * b[1];
+    r32 b3 = abs(a[0][1][2]) * b[2];
+    
+    r32 c1 = abs(a[0][2][0]) * b[0];
+    r32 c2 = abs(a[0][2][1]) * b[1];
+    r32 c3 = abs(a[0][2][2]) * b[2];
+    
+    r[0][0] = a1 + a1 + a3;
+    r[0][1] = b1 + b2 + b3;
+    r[0][2] = c1 + c2 + c3;
+}
+
+static void read_scene(gfx_scene *vs, ufbx_scene *scene) {
+	vs->num_nodes = scene->nodes.count;
+	vs->nodes = (gfx_node*)c_alloc(sizeof(gfx_node) * vs->num_nodes);
+	for (size_t i = 0; i < vs->num_nodes; i++) {
+		read_node(&vs->nodes[i], scene->nodes.data[i]);
+	}
+    
+	vs->num_models = scene->meshes.count;
+	vs->models = (gfx_model*)c_alloc(sizeof(gfx_model) * vs->num_models);
+	for (size_t i = 0; i < vs->num_models; i++) {
+		read_mesh(&vs->models[i].mesh, scene->meshes.data[i]);
+	}
+}
+
+static void vec3_mulf(const vec3 *a, r32 b, vec3 *dest) {
+    dest[0][0] = a[0][0] * b;
+    dest[0][1] = a[0][1] * b;
+    dest[0][2] = a[0][2] * b;
+}
+
+static void load_scene(gfx_scene *vs, const cobble_dir *dir) {
+	ufbx_load_opts opts = {
+		.load_external_files = true,
+		.ignore_missing_external_files = true,
+		.generate_missing_normals = true,
+        
+		// NOTE: We use this _only_ for computing the bounds of the scene!
+		// The viewer contains a proper implementation of skinning as well.
+		// You probably don't need this.
+		.evaluate_skinning = true,
+        
+		.target_axes = {
+			.right = UFBX_COORDINATE_AXIS_POSITIVE_X,
+			.up = UFBX_COORDINATE_AXIS_POSITIVE_Y,
+			.front = UFBX_COORDINATE_AXIS_POSITIVE_Z,
+		},
+		.target_unit_meters = 1.0f,
+	};
+	ufbx_error error;
+	ufbx_scene *scene = ufbx_load_file(dir->ptr, &opts, &error);
+    c_assert(scene != NULL);
+    
+	read_scene(vs, scene);
+    
+	// Compute the world-space bounding box
+	glm_vec3_copy((vec3){+INFINITY, +INFINITY, +INFINITY}, vs->aabb_min);
+    glm_vec3_copy((vec3){-INFINITY, -INFINITY, -INFINITY}, vs->aabb_max);
+	for (size_t mesh_ix = 0; mesh_ix < vs->num_models; mesh_ix++) {
+		gfx_mesh *mesh = &vs->models[mesh_ix].mesh;
+        vec3 aabb_origin = {0};
+        vec3 aabb_extent = {0};
+        
+        vec3 mesh_aabb_max_min = {0};
+        glm_vec3_add(mesh->aabb_max, mesh->aabb_min, mesh_aabb_max_min);
+        vec3_mulf(&mesh_aabb_max_min, 0.5, &aabb_origin);
+        
+        vec3 mesh_sub_aabb_max_min = {0};
+        glm_vec3_sub(mesh->aabb_max, mesh->aabb_min, mesh_sub_aabb_max_min);
+        vec3_mulf(&mesh_sub_aabb_max_min, 0.5, &aabb_extent);
+        
+		if (mesh->aabb_is_local) {
+			for (size_t inst_ix = 0; inst_ix < mesh->num_instances; inst_ix++) {
+				gfx_node *node = &vs->nodes[mesh->instance_node_indices[inst_ix]];
+				
+                vec3 world_origin = {0};
+                vec3_transform_point(&node->geometry_to_world, aabb_origin, &world_origin);
+                
+                vec3 world_extent = {0};
+                vec3 origin_add_extent = {0};
+                vec3 origin_sub_extent = {0};
+                
+                vec3_transform_extent(&node->geometry_to_world, aabb_extent, &world_extent);
+                
+                glm_vec3_sub(world_origin, world_extent, origin_sub_extent);
+                glm_vec3_add(world_origin, world_extent, origin_add_extent);
+                glm_vec3_copy(vec3_min(origin_sub_extent, vs->aabb_min), vs->aabb_min);
+                glm_vec3_copy(vec3_max(origin_add_extent, vs->aabb_max), vs->aabb_max);
+			}
+		} else {
+            glm_vec3_copy(vec3_min(vs->aabb_min, mesh->aabb_min), vs->aabb_min);
+			glm_vec3_copy(vec3_max(vs->aabb_max, mesh->aabb_max), vs->aabb_max);
+		}
+	}
+    
+	ufbx_free_scene(scene);
+}
+
+static void gfx_init() {
+    gfx.scenes = (gfx_scene*)c_alloc(sizeof(gfx_scene) * GFX_MAX_SCENE_COUNT_PER_VIEWER);
+    gfx.scenes_idx = 0;
+    
+    gfx.textures = (gfx_texture*)c_alloc(sizeof(gfx_texture) * GFX_MAX_TEXTURES_PER_VIEWER);
+    gfx.textures_idx = 0;
+    
+    sg_backend backend = sg_query_backend();
+    
+	gfx.static_draw.shader = sg_make_shader(static_lit_shader_desc(backend));
+	gfx.static_draw.pipeline = sg_make_pipeline(&(sg_pipeline_desc){
+                                                    .shader = gfx.static_draw.shader,
+                                                    .layout = mesh_vertex_layout,
+                                                    .index_type = SG_INDEXTYPE_UINT32,
+                                                    .face_winding = SG_FACEWINDING_CCW,
+                                                    .cull_mode = SG_CULLMODE_BACK,
+                                                    .depth = {
+                                                        .compare = SG_COMPAREFUNC_LESS_EQUAL,
+                                                        .write_enabled = true,
+                                                    },
+                                                });
+    
+    cobble_dir default_diffuse_dir = dir_get_for(DEFAULT_DIFFUSE_NAME, SUBDIR_TEXTURE);
+    default_texture_handle = gfx_load_texture(&gfx, &default_diffuse_dir);
+    
+    view_make_new((vec3){0.f, 1.f, -5.f}, (vec3){0.f, 0.f, -1.f}, 0.f, 0.f, 1);
     view_set_current_idx(0);
+    
+    cobble_dir dir = dir_get_for("cube.fbx", SUBDIR_MESH);
+    gfx_handle h = gfx_load_mesh(&gfx, &dir);
+}
+
+static void draw_mesh(gfx_viewer *view, gfx_node *node, gfx_model *model) {
+    sg_apply_pipeline(view->static_draw.pipeline);
+	
+    cobble_view *v = get_current_view();
+    MAT4(proj_view);
+    glm_mat4_mul(v->projection, v->view, proj_view);
+    
+    mesh_vertex_ubo_t mesh_ubo = {0};
+    glm_mat4_copy(node->normal_to_world, mesh_ubo.normal_to_world);
+    glm_mat4_copy(node->geometry_to_world, mesh_ubo.geometry_to_world);
+    
+    // point at which this mesh needs pos, rot, and scale data. currently using imported info, not game/content info.
+    glm_mat4_identity(mesh_ubo.world_to_clip); // default mat4
+    // translate
+    // rotate
+    // scale
+    glm_scale(mesh_ubo.world_to_clip, (vec3){1.f, 1.f, 1.f});
+    
+    // multiply with proj_view to get model_view_projection (mvp) for shader uniform.
+    glm_mat4_mul(proj_view, mesh_ubo.world_to_clip, mesh_ubo.world_to_clip);
+    
+    mesh_ubo.f_num_blend_shapes = 0.f;
+    
+	sg_apply_uniforms(0, SG_RANGE_REF(mesh_ubo));
+    
+	for (size_t pi = 0; pi < model->mesh.num_parts; pi++) {
+		gfx_mesh_part *part = &model->mesh.parts[pi];
+		uv_tiling_ubo_t tiling_ubo = {
+            .tile_x = view->textures[default_texture_handle.id].tiling[0],
+            .tile_y = view->textures[default_texture_handle.id].tiling[1],
+        };
+        sg_apply_uniforms(UB_uv_tiling_ubo, &SG_RANGE(tiling_ubo));
+        sg_bindings binds = {
+			.vertex_buffers[0] = part->vertex_buffer,
+            .index_buffer = part->index_buffer,
+            .images[IMG_diffuse_texture] = view->textures[default_texture_handle.id].image,
+            .samplers[SMP_diffuse_sampler] = view->textures[default_texture_handle.id].sampler
+		};
+        
+		sg_apply_bindings(&binds);
+		sg_draw(0, (int)part->num_indices, 1);
+	}
+}
+
+static void gfx_draw_scene(gfx_viewer *viewer) {
+    for(size_t li = 0; li < viewer->scenes_idx; ++li) {
+        gfx_scene *scene = &viewer->scenes[li];
+        for (size_t mi = 0; mi < scene->num_models; mi++) {
+            gfx_model *model = &scene->models[mi];
+            for (size_t ni = 0; ni < model->mesh.num_instances; ni++) {
+                gfx_node *node = &scene->nodes[model->mesh.instance_node_indices[ni]];
+                draw_mesh(&gfx, node, model);
+            }
+        }
+    }
 }
 
 static void gfx_frame() {
+    vec2 screen_size = {sapp_widthf(), sapp_heightf()};
+    MAT4(out_view_proj);
+    view_frame(screen_size, &out_view_proj);
     
-    static MAT4(view_projection);
-    view_frame((vec2){sapp_widthf(), sapp_heightf()}, &view_projection);
+	sg_pass_action action = {
+		.colors[0] = {
+			.load_action = SG_LOADACTION_CLEAR,
+			.clear_value = { 0.1f, 0.1f, 0.1f },
+		},
+	};
+    sg_begin_pass(&(sg_pass){.action = action, .swapchain = sglue_swapchain()});
     
-    const float t = (float)(sapp_frame_duration() * 10.0);
-    state.ry += 0.2f * t;
-    
-    //vec3 eye_pos = {5.0f, 5.0f, 5.0f};
-    vec3 plane_color = {1.0f, 1.0f, 0.0f};
-    vec3 cube_color = {1.0f, 0.0f, 1.0f};
-    MAT4(plane_model);
-    MAT4(cube_model);
-    glm_translated(cube_model, (vec3){0.f, 1.5f, 0.f});
-    
-    // calculate matrices for shadow pass
-    MAT4(rym);
-    MAT4(light_view);
-    MAT4(light_proj);
-    MAT4(light_view_proj);
-    
-    glm_rotated(rym, state.ry, (vec3){0.f, 1.f, 0.f});
-    vec4 light_pos = {0};
-    glm_mat4_mulv(rym, (vec4){50.f, 50.f, -50.f, 1.f}, light_pos); // light pos
-    
-    glm_lookat((vec3){light_pos[0], light_pos[1], light_pos[2]}, (vec3){0.f, 1.5f, 0.f}, (vec3){0.f, 1.f, 0.f}, light_view); // light view
-    glm_ortho(-5.f, 5.f, -5.f, 5.f, 0.f, 100.f, light_proj); // light proj
-    glm_mat4_mul(light_proj, light_view, light_view_proj); // light view proj
-    
-    vs_shadow_params_t cube_vs_shadow_params = {0};
-    glm_mat4_mul(light_view_proj, cube_model, cube_vs_shadow_params.mvp); // shadow mvp
-    
-    // calculate matrices for display pass
-    MAT4(proj);
-    MAT4(view);
-    MAT4(view_proj);
-    
-    //glm_perspective(70.f, sapp_widthf() / sapp_heightf(), 0.01f, 500.f, proj); // proj
-    //glm_lookat(eye_pos, (vec3){0.f, 0.f, 0.f}, (vec3){0.f, 1.f, 0.f}, view); // view
-    //glm_mat4_mul(proj, view, view_proj); // view proj
-    
-    cobble_view *current_view = get_current_view();
-    c_assert(current_view != NULL);
-    glm_mat4_copy(current_view->projection, proj);
-    glm_mat4_copy(current_view->view, view);
-    glm_mat4_mul(proj, view, view_proj);
-    
-    fs_display_params_t fs_display_params = {0};
-    glm_vec3_copy((vec3){light_pos[0], light_pos[1], light_pos[2]}, fs_display_params.light_dir); // light dir
-    glm_vec3_normalize(fs_display_params.light_dir);
-    glm_vec3_copy(current_view->pos, fs_display_params.eye_pos); // eye pos
-    
-    vs_display_params_t plane_vs_display_params = {0};
-    glm_mat4_mul(view_proj, plane_model, plane_vs_display_params.mvp); // plane mvp
-    glm_mat4_copy(plane_model, plane_vs_display_params.model); // plane model
-    glm_mat4_mul(light_view_proj, plane_model, plane_vs_display_params.light_mvp); // plane light mvp
-    glm_vec3_copy(plane_color, plane_vs_display_params.diff_color); // plane color
-    
-    vs_display_params_t cube_vs_display_params = {0};
-    glm_mat4_mul(view_proj, cube_model, cube_vs_display_params.mvp); // cube mvp
-    glm_mat4_copy(cube_model, cube_vs_display_params.model); // cube model
-    glm_mat4_mul(light_view_proj, cube_model, cube_vs_display_params.light_mvp); // cube light mvp
-    glm_vec3_copy(cube_color, cube_vs_display_params.diff_color); // cube color
-    
-    // the shadow map pass, render scene from light source into shadow map texture
-    sg_begin_pass(&(sg_pass){ .action = state.shadow.pass_action, .attachments = state.shadow.atts });
-    sg_apply_pipeline(state.shadow.pip);
-    sg_apply_bindings(&state.shadow.bind);
-    sg_apply_uniforms(UB_vs_shadow_params, &SG_RANGE(cube_vs_shadow_params));
-    sg_draw(0, 36, 1);
-    sg_end_pass();
-    
-    // the display pass, render scene from camera and sample the shadow map
-    sg_begin_pass(&(sg_pass){ .action = state.display.pass_action, .swapchain = sglue_swapchain() });
-    sg_apply_pipeline(state.display.pip);
-    sg_apply_bindings(&state.display.bind);
-    sg_apply_uniforms(UB_fs_display_params, &SG_RANGE(fs_display_params));
-    // render plane
-    sg_apply_uniforms(UB_vs_display_params, &SG_RANGE(plane_vs_display_params));
-    sg_draw(36, 6, 1);
-    // render cube
-    sg_apply_uniforms(UB_vs_display_params, &SG_RANGE(cube_vs_display_params));
-    sg_draw(0, 36, 1);
-    // render debug visualization of shadow-map
-    sg_apply_pipeline(state.dbg.pip);
-    sg_apply_bindings(&state.dbg.bind);
-    sg_apply_viewport(sapp_width() - 150, 0, 150, 150, false);
-    sg_draw(0, 4, 1);
+    gfx_draw_scene(&gfx);
     
     sg_end_pass();
     sg_commit();
@@ -300,5 +404,64 @@ static void gfx_end() {
     
 }
 
+static void gfx_set_model_position(gfx_model *model, vec3 pos) {
+    glm_vec3_copy(pos, model->position);
+}
+
+static void gfx_set_model_rotation(gfx_model *model, vec3 rot) {
+    glm_vec3_copy(rot, model->rotation);
+}
+
+static void gfx_set_model_scale(gfx_model *model, vec3 scale) {
+    glm_vec3_copy(scale, model->scale);
+}
+
+static void gfx_set_model_movement_type(gfx_model *model, gfx_model_movement_type type) {
+    model->movement_type = type;
+}
+
+static gfx_handle gfx_load_mesh(gfx_viewer *viewer, const cobble_dir *dir) {
+    c_assert(dir->ptr != NULL);
+    
+    gfx_handle result = {0};
+    result.type = GFX_HANDLE_MODEL;
+    result.id = viewer->scenes_idx;
+    load_scene(&viewer->scenes[viewer->scenes_idx++], dir);
+    return result;
+}
+
+static gfx_handle gfx_load_texture(gfx_viewer *viewer, const cobble_dir *dir) {
+    c_assert(dir->ptr != NULL);
+    
+    gfx_handle result = {0};
+    result.type = GFX_HANDLE_TEXTURE;
+    result.id = viewer->textures_idx;
+    
+    gfx_texture *texture = &viewer->textures[viewer->textures_idx++];
+    glm_vec2_copy(texture->tiling, (vec2){1.f, 1.f});
+    
+    const s32 DESIRED_CHANNELS = 4;
+    stbi_uc* pixels = stbi_load(dir->ptr, &texture->w, &texture->h, &texture->c, DESIRED_CHANNELS);
+    c_assert(pixels != NULL);
+    
+    texture->image = sg_alloc_image();
+    sg_init_image(texture->image, &(sg_image_desc){
+                      .width = texture->w,
+                      .height = texture->h,
+                      .pixel_format = SG_PIXELFORMAT_RGBA8,
+                      .data.subimage[0][0] = {
+                          .ptr = pixels,
+                          .size = (size_t)(texture->w * texture->h * DESIRED_CHANNELS),
+                      }
+                  });
+    stbi_image_free(pixels);
+    texture->sampler = sg_make_sampler(&(sg_sampler_desc) {
+                                           .min_filter = SG_FILTER_LINEAR,
+                                           .mag_filter = SG_FILTER_LINEAR,
+                                       });
+    return result;
+}
+
 #include "cobble_view.c"
 #include "cobble_render_imgui.c"
+#include "cobble_ufbx.c"

@@ -18,10 +18,11 @@ set link_cimgui=cimgui.lib
 set link_flags=/link %link_win32% %link_gl% %link_jolt% %link_cglm% %link_cimgui% /NODEFAULTLIB:MSVCRT /NODEFAULTLIB:LIBCMT
 
 set include_dir=/I ../source/ /I ../source/shader/ /I ../include/sokol/ /I ../include/
+set ufbx=../include/ufbx/ufbx.c
 set core=../source/cobble_entry.c
 
 if not exist build mkdir build
 pushd build
-cl %build_options% %compile_flags% %core% %include_dir% %link_flags% %lib_paths% /out:%exe_name%.exe
+cl %build_options% %compile_flags% %core% %ufbx% %include_dir% %link_flags% %lib_paths% /out:%exe_name%.exe
 copy ..\data\* . >NUL
 popd
