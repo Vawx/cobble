@@ -74,11 +74,36 @@ static void load_file_async(cobble_dir *dir, void *response_func, u8 *ptr, u64 p
                 });
 }
 
+#define SUBDIR_NONE ""
 #define SUBDIR_TEXTURE "/content/texture/"
 #define SUBDIR_MESH "/content/mesh/"
 #define SUBDIR_AUDIO "/content/audio/"
 #define SUBDIR_SHADER_SRC "/content/shader/"
 #define SUBDIR_SHADER_GEN "/source/shader/"
+
+typedef enum subdirs {
+    NONE_SUBDIR,
+    TEXTURE_SUBDIR,
+    MESH_SUBDIR,
+    AUDIO_SUBDIR,
+    SHADER_SRC_SUBDIR,
+    SHADER_GEN_SUBDIR,
+    
+    SUBDIRS_COUNT
+} subdirs;
+
+const char *subdir_str[SUBDIRS_COUNT] = {
+    SUBDIR_NONE,
+    SUBDIR_TEXTURE,
+    SUBDIR_MESH,
+    SUBDIR_AUDIO,
+    SUBDIR_SHADER_SRC,
+    SUBDIR_SHADER_GEN,
+};
+
+static u8 dir_valid(const cobble_dir *dir) {
+    return &dir->ptr[0] != NULL && dir->len > 0;
+}
 
 static cobble_dir dir_get_for(const char *file_name, const char *subdir) {
     cobble_dir dir = {0};
@@ -246,6 +271,47 @@ static m4 M4d(r32 d) {
 
 #define vec3_min(a, b) (vec3){c_min(a[0], b[0]), c_min(a[1], b[1]), c_min(a[2], b[2])}
 #define vec3_max(a, b) (vec3){c_max(a[0], b[0]), c_max(a[1], b[1]), c_max(a[2], b[2])}
+
+
+// MurmurHash64B (see: https://github.com/aappleby/smhasher/blob/61a0530f28277f2e850bfc39600ce61d02b518de/src/MurmurHash2.cpp#L142)
+const u64 WGPU_HASH_SEED = 2340923481023;
+u64 wgpu_hash(const void *key, int len) {
+    const u32 m = 0x5bd1e995;
+    const s32 r = 24;
+    u32 h1 = (u32)WGPU_HASH_SEED ^ (u32)len;
+    u32 h2 = (u32)(WGPU_HASH_SEED >> 32);
+    const u32 * data = (const u32 *)key;
+    while (len >= 8) {
+        u32 k1 = *data++;
+        k1 *= m; k1 ^= k1 >> r; k1 *= m;
+        h1 *= m; h1 ^= k1;
+        len -= 4;
+        u32 k2 = *data++;
+        k2 *= m; k2 ^= k2 >> r; k2 *= m;
+        h2 *= m; h2 ^= k2;
+        len -= 4;
+    }
+    if (len >= 4) {
+        u32 k1 = *data++;
+        k1 *= m; k1 ^= k1 >> r; k1 *= m;
+        h1 *= m; h1 ^= k1;
+        len -= 4;
+    }
+    switch(len) {
+        case 3: h2 ^= (u32)(((unsigned char*)data)[2] << 16);
+        case 2: h2 ^= (u32)(((unsigned char*)data)[1] << 8);
+        case 1: h2 ^= ((unsigned char*)data)[0];
+        h2 *= m;
+    };
+    h1 ^= h2 >> 18; h1 *= m;
+    h2 ^= h1 >> 22; h2 *= m;
+    h1 ^= h2 >> 17; h1 *= m;
+    h2 ^= h1 >> 19; h2 *= m;
+    u64 h = h1;
+    h = (h << 32) | h2;
+    return h;
+}
+
 
 #define COBBLE_UTIL_H
 #endif //COBBLE_UTIL_H

@@ -1,6 +1,6 @@
 #include "cobble_shader.h"
 
-static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.png";
+static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.texture";
 static gfx_handle default_texture_handle;
 
 #define ufbx_to_vec2(v) (vec2){v.x, v.y}
@@ -32,7 +32,7 @@ static void read_node(gfx_node *gnode, ufbx_node *node) {
 
 static gfx_viewer gfx;
 
-static void read_mesh(gfx_mesh *vmesh, ufbx_mesh *mesh) {
+static void read_mesh(gfx_mesh *vmesh, ufbx_mesh *mesh, u8 keep_raw_data) {
 	// Count the number of needed parts and temporary buffers
 	size_t max_parts = 0;
 	size_t max_triangles = 0;
@@ -60,10 +60,10 @@ static void read_mesh(gfx_mesh *vmesh, ufbx_mesh *mesh) {
 	// in two ways: (1) `ufbx_node.mesh/light/camera/etc` contains pointer to the data "attribute"
 	// that node uses and (2) each element that can be connected to a node contains a list of
 	// `ufbx_node*` instances eg. `ufbx_mesh.instances`.
-	vmesh->num_instances = mesh->instances.count;
-	vmesh->instance_node_indices = (s32*)c_alloc(sizeof(s32) * mesh->instances.count);
+	vmesh->num_indices = mesh->instances.count;
+	vmesh->indices = (s32*)c_alloc(sizeof(s32) * mesh->instances.count);
 	for (size_t i = 0; i < mesh->instances.count; i++) {
-		vmesh->instance_node_indices[i] = (int32_t)mesh->instances.data[i]->typed_id;
+		vmesh->indices[i] = (int32_t)mesh->instances.data[i]->typed_id;
 	}
     
 	// Our shader supports only a single material per draw call so we need to split the mesh
@@ -136,19 +136,30 @@ static void read_mesh(gfx_mesh *vmesh, ufbx_mesh *mesh) {
 		part->index_buffer = sg_make_buffer(&(sg_buffer_desc){
                                                 .size = num_indices * sizeof(uint32_t),
                                                 .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                .data = { indices, num_indices * sizeof(uint32_t) },
+                                                .data = { indices, num_indices * sizeof(u32) },
                                             });
 		part->vertex_buffer = sg_make_buffer(&(sg_buffer_desc){
                                                  .size = num_vertices * sizeof(mesh_vertex),
                                                  .type = SG_BUFFERTYPE_VERTEXBUFFER,
                                                  .data = { vertices, num_vertices * sizeof(mesh_vertex) },
                                              });
-	}
+        
+        // this may get cleared below.
+        part->vertices = (u8*)vertices;
+        part->vertices_size = num_vertices * sizeof(mesh_vertex);
+        
+        part->indices = (u8*)indices;
+        part->indices_size = num_vertices * sizeof(u32);
+    }
     
 	// Free the temporary buffers
 	c_free((u8*)tri_indices);
-	c_free((u8*)vertices);
-	c_free((u8*)indices);
+    
+    // maybe keep others, this is for importing mesh assets.
+    if(!keep_raw_data) {
+        c_free((u8*)vertices);
+        c_free((u8*)indices);
+    } 
     
 	// Compute bounds from the vertices
 	vmesh->aabb_is_local = mesh->skinned_is_local;
@@ -205,17 +216,18 @@ static void vec3_transform_extent(const mat4 *a, vec3 b, vec3 *r) {
     r[0][2] = c1 + c2 + c3;
 }
 
-static void read_scene(gfx_scene *vs, ufbx_scene *scene) {
+static void read_scene(gfx_scene *vs, ufbx_scene *scene, u8 keep_raw_data) {
+    c_assert(vs->id > 0);
 	vs->num_nodes = scene->nodes.count;
 	vs->nodes = (gfx_node*)c_alloc(sizeof(gfx_node) * vs->num_nodes);
 	for (size_t i = 0; i < vs->num_nodes; i++) {
 		read_node(&vs->nodes[i], scene->nodes.data[i]);
 	}
     
-	vs->num_models = scene->meshes.count;
-	vs->models = (gfx_model*)c_alloc(sizeof(gfx_model) * vs->num_models);
-	for (size_t i = 0; i < vs->num_models; i++) {
-		read_mesh(&vs->models[i].mesh, scene->meshes.data[i]);
+	vs->model_idx = scene->meshes.count;
+	vs->models = (gfx_model*)c_alloc(sizeof(gfx_model) * vs->model_idx);
+	for (size_t i = 0; i < vs->model_idx; i++) {
+		read_mesh(&vs->models[i].mesh, scene->meshes.data[i], keep_raw_data);
 	}
 }
 
@@ -225,7 +237,9 @@ static void vec3_mulf(const vec3 *a, r32 b, vec3 *dest) {
     dest[0][2] = a[0][2] * b;
 }
 
-static void load_scene(gfx_scene *vs, const cobble_dir *dir) {
+static void gfx_load_scene(gfx_scene *vs, const cobble_dir *dir, u8 keep_raw_data) {
+    c_assert(vs->id > 0);
+    
 	ufbx_load_opts opts = {
 		.load_external_files = true,
 		.ignore_missing_external_files = true,
@@ -247,12 +261,12 @@ static void load_scene(gfx_scene *vs, const cobble_dir *dir) {
 	ufbx_scene *scene = ufbx_load_file(dir->ptr, &opts, &error);
     c_assert(scene != NULL);
     
-	read_scene(vs, scene);
+	read_scene(vs, scene, keep_raw_data);
     
 	// Compute the world-space bounding box
 	glm_vec3_copy((vec3){+INFINITY, +INFINITY, +INFINITY}, vs->aabb_min);
     glm_vec3_copy((vec3){-INFINITY, -INFINITY, -INFINITY}, vs->aabb_max);
-	for (size_t mesh_ix = 0; mesh_ix < vs->num_models; mesh_ix++) {
+	for (size_t mesh_ix = 0; mesh_ix < vs->model_idx; mesh_ix++) {
 		gfx_mesh *mesh = &vs->models[mesh_ix].mesh;
         vec3 aabb_origin = {0};
         vec3 aabb_extent = {0};
@@ -266,8 +280,8 @@ static void load_scene(gfx_scene *vs, const cobble_dir *dir) {
         vec3_mulf(&mesh_sub_aabb_max_min, 0.5, &aabb_extent);
         
 		if (mesh->aabb_is_local) {
-			for (size_t inst_ix = 0; inst_ix < mesh->num_instances; inst_ix++) {
-				gfx_node *node = &vs->nodes[mesh->instance_node_indices[inst_ix]];
+			for (size_t inst_ix = 0; inst_ix < mesh->num_indices; inst_ix++) {
+				gfx_node *node = &vs->nodes[mesh->indices[inst_ix]];
 				
                 vec3 world_origin = {0};
                 vec3_transform_point(&node->geometry_to_world, aabb_origin, &world_origin);
@@ -296,9 +310,6 @@ static void gfx_init() {
     gfx.scenes = (gfx_scene*)c_alloc(sizeof(gfx_scene) * GFX_MAX_SCENE_COUNT_PER_VIEWER);
     gfx.scenes_idx = 0;
     
-    gfx.textures = (gfx_texture*)c_alloc(sizeof(gfx_texture) * GFX_MAX_TEXTURES_PER_VIEWER);
-    gfx.textures_idx = 0;
-    
     sg_backend backend = sg_query_backend();
     
 	gfx.static_draw.shader = sg_make_shader(static_lit_shader_desc(backend));
@@ -315,13 +326,15 @@ static void gfx_init() {
                                                 });
     
     cobble_dir default_diffuse_dir = dir_get_for(DEFAULT_DIFFUSE_NAME, SUBDIR_TEXTURE);
-    default_texture_handle = gfx_load_texture(&gfx, &default_diffuse_dir);
+    default_texture_handle = gfx_load_texture_asset(&gfx, &default_diffuse_dir);
     
     view_make_new((vec3){0.f, 1.f, -5.f}, (vec3){0.f, 0.f, -1.f}, 0.f, 0.f, 1);
     view_set_current_idx(0);
     
-    cobble_dir dir = dir_get_for("cube.fbx", SUBDIR_MESH);
-    gfx_handle h = gfx_load_mesh(&gfx, &dir);
+    cobble_dir dir = dir_get_for("cube.mesh", SUBDIR_MESH);
+    asset mm = asset_load(&dir);
+    
+    printf("");
 }
 
 static void draw_mesh(gfx_viewer *view, gfx_node *node, gfx_model *model) {
@@ -352,15 +365,15 @@ static void draw_mesh(gfx_viewer *view, gfx_node *node, gfx_model *model) {
 	for (size_t pi = 0; pi < model->mesh.num_parts; pi++) {
 		gfx_mesh_part *part = &model->mesh.parts[pi];
 		uv_tiling_ubo_t tiling_ubo = {
-            .tile_x = view->textures[default_texture_handle.id].tiling[0],
-            .tile_y = view->textures[default_texture_handle.id].tiling[1],
+            .tile_x = view->scenes[view->scenes_current].textures[default_texture_handle.id].tiling[0],
+            .tile_y = view->scenes[view->scenes_current].textures[default_texture_handle.id].tiling[1],
         };
         sg_apply_uniforms(UB_uv_tiling_ubo, &SG_RANGE(tiling_ubo));
         sg_bindings binds = {
 			.vertex_buffers[0] = part->vertex_buffer,
             .index_buffer = part->index_buffer,
-            .images[IMG_diffuse_texture] = view->textures[default_texture_handle.id].image,
-            .samplers[SMP_diffuse_sampler] = view->textures[default_texture_handle.id].sampler
+            .images[IMG_diffuse_texture] = view->scenes[view->scenes_current].textures[default_texture_handle.id].image,
+            .samplers[SMP_diffuse_sampler] = view->scenes[view->scenes_current].textures[default_texture_handle.id].sampler
 		};
         
 		sg_apply_bindings(&binds);
@@ -371,10 +384,10 @@ static void draw_mesh(gfx_viewer *view, gfx_node *node, gfx_model *model) {
 static void gfx_draw_scene(gfx_viewer *viewer) {
     for(size_t li = 0; li < viewer->scenes_idx; ++li) {
         gfx_scene *scene = &viewer->scenes[li];
-        for (size_t mi = 0; mi < scene->num_models; mi++) {
+        for (size_t mi = 0; mi < scene->model_idx; mi++) {
             gfx_model *model = &scene->models[mi];
-            for (size_t ni = 0; ni < model->mesh.num_instances; ni++) {
-                gfx_node *node = &scene->nodes[model->mesh.instance_node_indices[ni]];
+            for (size_t ni = 0; ni < model->mesh.num_indices; ni++) {
+                gfx_node *node = &scene->nodes[model->mesh.indices[ni]];
                 draw_mesh(&gfx, node, model);
             }
         }
@@ -420,41 +433,64 @@ static void gfx_set_model_movement_type(gfx_model *model, gfx_model_movement_typ
     model->movement_type = type;
 }
 
-static gfx_handle gfx_load_mesh(gfx_viewer *viewer, const cobble_dir *dir) {
-    c_assert(dir->ptr != NULL);
+static gfx_handle gfx_load_mesh(gfx_viewer *viewer, const cobble_dir *dir, u8 keep_raw_data) {
+    c_assert(dir_valid(dir));
     
-    gfx_handle result = {0};
+    gfx_handle result = {-1};
     result.type = GFX_HANDLE_MODEL;
     result.id = viewer->scenes_idx;
-    load_scene(&viewer->scenes[viewer->scenes_idx++], dir);
+    gfx_load_scene(&viewer->scenes[viewer->scenes_idx++], dir, keep_raw_data);
     return result;
 }
 
-static gfx_handle gfx_load_texture(gfx_viewer *viewer, const cobble_dir *dir) {
-    c_assert(dir->ptr != NULL);
+static gfx_handle gfx_load_mesh_asset(gfx_viewer *viewer, const cobble_dir *dir) {
+    c_assert(dir_valid(dir));
     
-    gfx_handle result = {0};
+    asset mesh_asset = asset_load(dir);
+    c_assert(mesh_asset.type == ASSET_TYPE_MESH);
+    
+    
+}
+
+static gfx_handle gfx_load_texture_asset(gfx_viewer *viewer, const cobble_dir *dir) {
+    c_assert(dir_valid(dir));
+    
+    gfx_handle result = {-1};
     result.type = GFX_HANDLE_TEXTURE;
-    result.id = viewer->textures_idx;
     
-    gfx_texture *texture = &viewer->textures[viewer->textures_idx++];
+    gfx_scene *current_scene = &viewer->scenes[viewer->scenes_current];
+    c_assert(current_scene->id > 0);
+    
+    // check if asset exists
+    u64 hash = wgpu_hash(dir->ptr, dir->len);
+    for(s32 i = 0; i < viewer->scenes[viewer->scenes_current].textures_idx; ++i) {
+        if(viewer->scenes[viewer->scenes_current].textures[i].file_hash == hash) {
+            result.id = i;
+            return result; // found it, return it
+        }
+    }
+    
+    asset texture_asset = asset_load(dir);
+    c_assert(texture_asset.type == ASSET_TYPE_TEXTURE);
+    
+    
+    // asset not found already loaded, load and bind.
+    result.id = current_scene->textures_idx;
+    
+    gfx_texture *texture = &current_scene->textures[current_scene->textures_idx++]; // increments the viewer texture buffer here
     glm_vec2_copy(texture->tiling, (vec2){1.f, 1.f});
     
-    const s32 DESIRED_CHANNELS = 4;
-    stbi_uc* pixels = stbi_load(dir->ptr, &texture->w, &texture->h, &texture->c, DESIRED_CHANNELS);
-    c_assert(pixels != NULL);
-    
+    texture->file_hash = texture_asset.file_hash;
     texture->image = sg_alloc_image();
     sg_init_image(texture->image, &(sg_image_desc){
-                      .width = texture->w,
-                      .height = texture->h,
+                      .width = texture_asset.texture.w,
+                      .height = texture_asset.texture.h,
                       .pixel_format = SG_PIXELFORMAT_RGBA8,
                       .data.subimage[0][0] = {
-                          .ptr = pixels,
-                          .size = (size_t)(texture->w * texture->h * DESIRED_CHANNELS),
+                          .ptr = texture_asset.texture.ptr,
+                          .size = (size_t)(texture_asset.texture.w * texture_asset.texture.h * texture_asset.texture.desired_channels),
                       }
                   });
-    stbi_image_free(pixels);
     texture->sampler = sg_make_sampler(&(sg_sampler_desc) {
                                            .min_filter = SG_FILTER_LINEAR,
                                            .mag_filter = SG_FILTER_LINEAR,

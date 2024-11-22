@@ -11,8 +11,12 @@
 static void core_input_callback(sapp_event *event); // used by external systems for input, like IMGUI
 #include "util/cobble_input.h"
 
+#include "cobble_serialize.h"
+
 #include "render/cobble_gfx.h"
 #include "render/cobble_gfx.c"
+
+#include "cobble_serialize.c"
 
 typedef struct cobble_time {
     r64 delta;
@@ -31,6 +35,12 @@ static void core_init(void) {
              });
     
     printf("[cobble]: initializing root directory %s\n", root_dir.ptr);
+    
+    cobble_dir test = dir_get_for("cube.fbx", SUBDIR_MESH);
+    asset a = asset_make(&test);
+    
+    cobble_dir save_test = dir_get_for("cube.mesh", SUBDIR_MESH);
+    bool vv = asset_save(&save_test, &a);
     
     gfx_init();
     imgui_init();
@@ -54,7 +64,6 @@ static void core_init(void) {
     QueryPerformanceFrequency(&ii);
     time.freq = ii.QuadPart;
 #endif
-    
     
     //shapes_test();
     sfetch_setup(&(sfetch_desc_t){

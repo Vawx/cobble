@@ -2,8 +2,27 @@
 
 #if !defined(COBBLE_GFX_H)
 
-#include "cobble_ufbx.h"
 #include "cobble_view.h"
+#include "ufbx/ufbx.h"
+
+#define UFBX_MAX_PIECES_PER_MESH 8
+
+typedef struct ufbx_vertex {
+    r32 x,y,z,a,b,c;
+    //ufbx_vec2 uv;
+} ufbx_vertex;
+
+typedef struct ufbx_mesh_piece {
+    ufbx_vertex *vertices;
+    u32 num_vertices;
+    u16 *indices;
+    u32 num_indices;
+} ufbx_mesh_piece;
+
+typedef struct ufbx_mesh_object {
+    ufbx_mesh_piece *mesh_pieces;
+    u32 mesh_pieces_count;
+} ufbx_mesh_object;
 
 typedef enum gfx_handle_type {
     GFX_HANDLE_NONE,
@@ -34,23 +53,15 @@ typedef struct gfx_node {
 } gfx_node;
 
 typedef struct gfx_mesh_part {
-	sg_buffer vertex_buffer;
-	sg_buffer index_buffer;
+    sg_buffer vertex_buffer;
+    sg_buffer index_buffer;
+    u8 *vertices;
+    u32 vertices_size;
+    u8 *indices;
+    u32 indices_size;
 	u32 num_indices;
     s32 material_index;
 } gfx_mesh_part;
-
-typedef struct gfx_mesh {
-    s32 *instance_node_indices;
-    u32 num_instances;
-    
-	gfx_mesh_part *parts;
-    u32 num_parts;
-    
-	bool aabb_is_local;
-	vec3 aabb_min;
-	vec3 aabb_max;
-} gfx_mesh;
 
 typedef enum gfx_texture_type {
     GFX_TEXTURE_DIFFUSE,
@@ -67,12 +78,26 @@ typedef struct gfx_texture {
     u32 w;
     u32 h;
     u32 c;
+    
+    u64 file_hash;
 } gfx_texture;
 
 typedef enum gfx_model_movement_type {
     GFX_MOVEMENT_STATIC,
     GFX_MOVEMENT_DYNAMIC,
 } gfx_model_movement_type;
+
+typedef struct gfx_mesh {
+    s32 *indices;
+    u32 num_indices;
+    
+	gfx_mesh_part *parts;
+    u32 num_parts;
+    
+	bool aabb_is_local;
+	vec3 aabb_min;
+	vec3 aabb_max;
+} gfx_mesh;
 
 typedef struct gfx_model {
     gfx_mesh  mesh;
@@ -89,13 +114,15 @@ typedef struct gfx_scene {
     u32 num_nodes;
     
 	gfx_model *models;
-    u32 num_models;
+    u32 model_idx;
     
-    gfx_handle texture_handles[GFX_TEXTURE_COUNT];
-    u32 num_texture_handles;
+    gfx_texture *textures;
+    u32 textures_idx;
     
 	vec3 aabb_min;
 	vec3 aabb_max;
+    
+    s32 id; 
 } gfx_scene;
 
 typedef struct gfx_static_draw {
@@ -113,9 +140,7 @@ typedef struct gfx_shadow_draw {
 typedef struct gfx {
     gfx_scene *scenes;
     u32 scenes_idx;
-    
-    gfx_texture *textures;
-    u32 textures_idx;
+    u32 scenes_current;
     
     gfx_static_draw static_draw;
     gfx_shadow_draw shadow_draw;
@@ -125,8 +150,10 @@ static void gfx_set_model_position(gfx_model *model, vec3 pos);
 static void gfx_set_model_rotation(gfx_model *model, vec3 rot);
 static void gfx_set_model_scale(gfx_model *model, vec3 scale);
 
-static gfx_handle gfx_load_mesh(gfx_viewer *viewer, const cobble_dir *dir);
+static void gfx_load_scene(gfx_scene *vs, const cobble_dir *dir, u8 keep_raw_data);
+static gfx_handle gfx_load_mesh(gfx_viewer *viewer, const cobble_dir *dir, u8 keep_raw_data);
 static gfx_handle gfx_load_texture(gfx_viewer *viewer, const cobble_dir *dir);
+static gfx_handle gfx_load_texture_asset(gfx_viewer *viewer, const cobble_dir *dir);
 
 static void gfx_init();
 static void gfx_frame();
