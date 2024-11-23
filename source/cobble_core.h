@@ -36,12 +36,6 @@ static void core_init(void) {
     
     printf("[cobble]: initializing root directory %s\n", root_dir.ptr);
     
-    cobble_dir test = dir_get_for("cube.fbx", SUBDIR_MESH);
-    asset a = asset_make(&test);
-    
-    cobble_dir save_test = dir_get_for("cube.mesh", SUBDIR_MESH);
-    bool vv = asset_save(&save_test, &a);
-    
     gfx_init();
     imgui_init();
     
@@ -65,7 +59,6 @@ static void core_init(void) {
     time.freq = ii.QuadPart;
 #endif
     
-    //shapes_test();
     sfetch_setup(&(sfetch_desc_t){
                      .max_requests = 1,
                      .num_channels = 1,

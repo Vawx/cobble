@@ -14,19 +14,19 @@ static asset_mesh asset_generate_mesh(const cobble_dir *dir) {
     c_assert(dir->ptr != NULL);
     asset_mesh result = {0};
     
-    gfx_scene load_scene = {0};
-    gfx_load_scene(&load_scene, dir, true);
+    gfx_scene *scene = &gfx.scenes[gfx.scenes_current];
+    gfx_load_scene(scene, dir, true);
     
     u32 num_parts = 0;
-    for(s32 i = 0; i < load_scene.model_idx; ++i) {
-        gfx_model *model = &load_scene.models[i];
+    for(s32 i = 0; i < scene->model_idx; ++i) {
+        gfx_model *model = &scene->models[i];
         num_parts += model->mesh.num_parts;
     }
     
     result.instances = (asset_mesh_instance*)c_alloc(sizeof(asset_mesh_instance) * num_parts);
     result.instances_count = num_parts;
-    for(s32 i = 0; i < load_scene.model_idx; ++i) {
-        gfx_model *model = &load_scene.models[i];
+    for(s32 i = 0; i < scene->model_idx; ++i) {
+        gfx_model *model = &scene->models[i];
         for(s32 j = 0; j < model->mesh.num_parts; ++j) {
             gfx_mesh_part *part = &model->mesh.parts[j];
             result.instances[j].vertices = part->vertices;

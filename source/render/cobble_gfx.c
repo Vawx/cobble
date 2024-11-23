@@ -20,16 +20,6 @@ static const sg_vertex_layout_state mesh_vertex_layout = {
 	},
 };
 
-
-static void read_node(gfx_node *gnode, ufbx_node *node) {
-	gnode->parent_index = node->parent ? node->parent->typed_id : -1;
-	glm_mat4_copy(ufbx_to_mat4(node->node_to_parent), gnode->node_to_parent);
-    glm_mat4_copy(ufbx_to_mat4(node->node_to_world), gnode->node_to_world);
-    glm_mat4_copy(ufbx_to_mat4(node->geometry_to_node), gnode->geometry_to_node);
-	glm_mat4_copy(ufbx_to_mat4(node->geometry_to_world), gnode->geometry_to_world);
-	glm_mat4_copy(ufbx_to_mat4(ufbx_matrix_for_normals(&node->geometry_to_world)), gnode->normal_to_world);
-}
-
 static gfx_viewer gfx;
 
 static void read_mesh(gfx_mesh *vmesh, ufbx_mesh *mesh, u8 keep_raw_data) {
@@ -149,7 +139,7 @@ static void read_mesh(gfx_mesh *vmesh, ufbx_mesh *mesh, u8 keep_raw_data) {
         part->vertices_size = num_vertices * sizeof(mesh_vertex);
         
         part->indices = (u8*)indices;
-        part->indices_size = num_vertices * sizeof(u32);
+        part->indices_size = num_indices * sizeof(u32);
     }
     
 	// Free the temporary buffers
@@ -217,13 +207,8 @@ static void vec3_transform_extent(const mat4 *a, vec3 b, vec3 *r) {
 }
 
 static void read_scene(gfx_scene *vs, ufbx_scene *scene, u8 keep_raw_data) {
-    c_assert(vs->id > 0);
-	vs->num_nodes = scene->nodes.count;
-	vs->nodes = (gfx_node*)c_alloc(sizeof(gfx_node) * vs->num_nodes);
-	for (size_t i = 0; i < vs->num_nodes; i++) {
-		read_node(&vs->nodes[i], scene->nodes.data[i]);
-	}
-    
+    c_assert(vs->initialized);
+	
 	vs->model_idx = scene->meshes.count;
 	vs->models = (gfx_model*)c_alloc(sizeof(gfx_model) * vs->model_idx);
 	for (size_t i = 0; i < vs->model_idx; i++) {
@@ -238,7 +223,7 @@ static void vec3_mulf(const vec3 *a, r32 b, vec3 *dest) {
 }
 
 static void gfx_load_scene(gfx_scene *vs, const cobble_dir *dir, u8 keep_raw_data) {
-    c_assert(vs->id > 0);
+    c_assert(vs->initialized);
     
 	ufbx_load_opts opts = {
 		.load_external_files = true,
@@ -281,16 +266,16 @@ static void gfx_load_scene(gfx_scene *vs, const cobble_dir *dir, u8 keep_raw_dat
         
 		if (mesh->aabb_is_local) {
 			for (size_t inst_ix = 0; inst_ix < mesh->num_indices; inst_ix++) {
-				gfx_node *node = &vs->nodes[mesh->indices[inst_ix]];
 				
                 vec3 world_origin = {0};
-                vec3_transform_point(&node->geometry_to_world, aabb_origin, &world_origin);
+                MAT4(ident);
+                vec3_transform_point(&ident, aabb_origin, &world_origin);
                 
                 vec3 world_extent = {0};
                 vec3 origin_add_extent = {0};
                 vec3 origin_sub_extent = {0};
                 
-                vec3_transform_extent(&node->geometry_to_world, aabb_extent, &world_extent);
+                vec3_transform_extent(&ident, aabb_extent, &world_extent);
                 
                 glm_vec3_sub(world_origin, world_extent, origin_sub_extent);
                 glm_vec3_add(world_origin, world_extent, origin_add_extent);
@@ -306,9 +291,29 @@ static void gfx_load_scene(gfx_scene *vs, const cobble_dir *dir, u8 keep_raw_dat
 	ufbx_free_scene(scene);
 }
 
+static void gfx_set_scene_by_id(gfx_viewer *viewer, const u32 idx) {
+    c_assert(idx < GFX_MAX_SCENE_COUNT_PER_VIEWER); // unsigned so always 0 or greater.
+    
+    if(viewer->scenes == NULL) {
+        viewer->scenes = (gfx_scene*)c_alloc(sizeof(gfx_scene) * GFX_MAX_SCENE_COUNT_PER_VIEWER);
+        viewer->scenes_idx = 1; // TODO(Kyle) this is set to one as we have a global "gfx" view. change it when we are using more than one.
+        viewer->scenes_current = 0;
+    }
+    
+    gfx_scene *id_scene = &viewer->scenes[idx];
+    if(!id_scene->initialized) {
+        id_scene->models = (gfx_model*)c_alloc(GFX_MAX_MODELS_PER_VIEWER * sizeof(gfx_model));
+        id_scene->textures = (gfx_texture*)c_alloc(GFX_MAX_TEXTURES_PER_VIEWER * sizeof(gfx_texture));
+        id_scene->model_idx = 0;
+        id_scene->texture_idx = 0;
+        id_scene->initialized = 1;
+    }
+    
+    viewer->scenes_current = idx;
+}
+
 static void gfx_init() {
-    gfx.scenes = (gfx_scene*)c_alloc(sizeof(gfx_scene) * GFX_MAX_SCENE_COUNT_PER_VIEWER);
-    gfx.scenes_idx = 0;
+    gfx_set_scene_by_id(&gfx, 0);
     
     sg_backend backend = sg_query_backend();
     
@@ -332,21 +337,21 @@ static void gfx_init() {
     view_set_current_idx(0);
     
     cobble_dir dir = dir_get_for("cube.mesh", SUBDIR_MESH);
-    asset mm = asset_load(&dir);
-    
-    printf("");
+    gfx_load_mesh_asset(&gfx, &dir);
 }
 
-static void draw_mesh(gfx_viewer *view, gfx_node *node, gfx_model *model) {
+static void draw_mesh(gfx_viewer *view, gfx_model *model) {
     sg_apply_pipeline(view->static_draw.pipeline);
 	
     cobble_view *v = get_current_view();
     MAT4(proj_view);
     glm_mat4_mul(v->projection, v->view, proj_view);
     
+    MAT4(ident);
+    
     mesh_vertex_ubo_t mesh_ubo = {0};
-    glm_mat4_copy(node->normal_to_world, mesh_ubo.normal_to_world);
-    glm_mat4_copy(node->geometry_to_world, mesh_ubo.geometry_to_world);
+    glm_mat4_copy(ident, mesh_ubo.normal_to_world);
+    glm_mat4_copy(ident, mesh_ubo.geometry_to_world);
     
     // point at which this mesh needs pos, rot, and scale data. currently using imported info, not game/content info.
     glm_mat4_identity(mesh_ubo.world_to_clip); // default mat4
@@ -359,6 +364,7 @@ static void draw_mesh(gfx_viewer *view, gfx_node *node, gfx_model *model) {
     glm_mat4_mul(proj_view, mesh_ubo.world_to_clip, mesh_ubo.world_to_clip);
     
     mesh_ubo.f_num_blend_shapes = 0.f;
+    
     
 	sg_apply_uniforms(0, SG_RANGE_REF(mesh_ubo));
     
@@ -386,10 +392,7 @@ static void gfx_draw_scene(gfx_viewer *viewer) {
         gfx_scene *scene = &viewer->scenes[li];
         for (size_t mi = 0; mi < scene->model_idx; mi++) {
             gfx_model *model = &scene->models[mi];
-            for (size_t ni = 0; ni < model->mesh.num_indices; ni++) {
-                gfx_node *node = &scene->nodes[model->mesh.indices[ni]];
-                draw_mesh(&gfx, node, model);
-            }
+            draw_mesh(&gfx, model);
         }
     }
 }
@@ -445,11 +448,49 @@ static gfx_handle gfx_load_mesh(gfx_viewer *viewer, const cobble_dir *dir, u8 ke
 
 static gfx_handle gfx_load_mesh_asset(gfx_viewer *viewer, const cobble_dir *dir) {
     c_assert(dir_valid(dir));
+    gfx_handle result = {0};
     
     asset mesh_asset = asset_load(dir);
     c_assert(mesh_asset.type == ASSET_TYPE_MESH);
     
+    gfx_scene *scene = &viewer->scenes[viewer->scenes_current];
+    c_assert(scene->initialized);
     
+    result.id = scene->model_idx;
+    gfx_model *model = &scene->models[scene->model_idx];
+    ++scene->model_idx;
+    
+    gfx_mesh *mesh = &model->mesh;
+    
+    mesh->num_parts = mesh_asset.mesh.instances_count;
+    printf("%d\n", mesh->num_parts);
+    
+    mesh->parts = (gfx_mesh_part*)c_alloc(sizeof(gfx_mesh_part) * mesh->num_parts);
+    for(s32 i = 0; i < mesh_asset.mesh.instances_count; ++i) {
+        // since we are loading this mesh from an asset, we can take the data directly
+        // these are used for importing.
+        mesh->parts[i].vertices = NULL;
+        mesh->parts[i].vertices_size = 0;
+        mesh->parts[i].indices = NULL;
+        mesh->parts[i].indices_size = 0;
+        
+        // actual data
+        mesh->parts[i].num_indices = mesh_asset.mesh.instances[i].indices_size / sizeof(u32);
+        mesh->parts[i].indices_size = mesh_asset.mesh.instances[i].indices_size;
+        mesh->parts[i].vertices_size = mesh_asset.mesh.instances[i].vertices_size;
+        
+        mesh->parts[i].index_buffer = sg_make_buffer(&(sg_buffer_desc){
+                                                         .size = mesh_asset.mesh.instances[i].indices_size,
+                                                         .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                         .data = { mesh_asset.mesh.instances[i].indices, mesh_asset.mesh.instances[i].indices_size },
+                                                     });
+        mesh->parts[i].vertex_buffer = sg_make_buffer(&(sg_buffer_desc){
+                                                          .size = mesh_asset.mesh.instances[i].vertices_size,
+                                                          .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                          .data = { mesh_asset.mesh.instances[i].vertices, mesh_asset.mesh.instances[i].vertices_size },
+                                                      });
+    }
+    return result;
 }
 
 static gfx_handle gfx_load_texture_asset(gfx_viewer *viewer, const cobble_dir *dir) {
@@ -459,11 +500,11 @@ static gfx_handle gfx_load_texture_asset(gfx_viewer *viewer, const cobble_dir *d
     result.type = GFX_HANDLE_TEXTURE;
     
     gfx_scene *current_scene = &viewer->scenes[viewer->scenes_current];
-    c_assert(current_scene->id > 0);
+    c_assert(current_scene->initialized);
     
     // check if asset exists
     u64 hash = wgpu_hash(dir->ptr, dir->len);
-    for(s32 i = 0; i < viewer->scenes[viewer->scenes_current].textures_idx; ++i) {
+    for(s32 i = 0; i < viewer->scenes[viewer->scenes_current].texture_idx; ++i) {
         if(viewer->scenes[viewer->scenes_current].textures[i].file_hash == hash) {
             result.id = i;
             return result; // found it, return it
@@ -473,11 +514,10 @@ static gfx_handle gfx_load_texture_asset(gfx_viewer *viewer, const cobble_dir *d
     asset texture_asset = asset_load(dir);
     c_assert(texture_asset.type == ASSET_TYPE_TEXTURE);
     
-    
     // asset not found already loaded, load and bind.
-    result.id = current_scene->textures_idx;
+    result.id = current_scene->texture_idx;
     
-    gfx_texture *texture = &current_scene->textures[current_scene->textures_idx++]; // increments the viewer texture buffer here
+    gfx_texture *texture = &current_scene->textures[current_scene->texture_idx++]; // increments the viewer texture buffer here
     glm_vec2_copy(texture->tiling, (vec2){1.f, 1.f});
     
     texture->file_hash = texture_asset.file_hash;

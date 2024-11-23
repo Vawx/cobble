@@ -6,13 +6,8 @@
 
 #define UFBX_MAX_PIECES_PER_MESH 8
 
-typedef struct ufbx_vertex {
-    r32 x,y,z,a,b,c;
-    //ufbx_vec2 uv;
-} ufbx_vertex;
-
 typedef struct ufbx_mesh_piece {
-    ufbx_vertex *vertices;
+    mesh_vertex *vertices;
     u32 num_vertices;
     u16 *indices;
     u32 num_indices;

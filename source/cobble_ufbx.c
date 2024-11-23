@@ -3,7 +3,7 @@ static ufbx_mesh_piece ufbx_convert_mesh_part(ufbx_mesh_part *part, ufbx_mesh *m
     ufbx_mesh_piece result = {0};
     
     size_t num_triangles = part->num_triangles;
-    result.vertices = (ufbx_vertex*)c_alloc(num_triangles * 3 * sizeof(ufbx_vertex));
+    result.vertices = (mesh_vertex*)c_alloc(num_triangles * 3 * sizeof(mesh_vertex));
     result.num_vertices = 0;
     
     // Reserve space for the maximum triangle indices.
@@ -21,18 +21,19 @@ static ufbx_mesh_piece ufbx_convert_mesh_part(ufbx_mesh_part *part, ufbx_mesh *m
         for (size_t i = 0; i < num_tris * 3; i++) {
             u32 index = tri_indices[i];
             
-            ufbx_vertex *v = &result.vertices[result.num_vertices++];
+            mesh_vertex *v = &result.vertices[result.num_vertices++];
             ufbx_vec3 pos = ufbx_get_vertex_vec3(&mesh->vertex_position, index);
             ufbx_vec3 norm = ufbx_get_vertex_vec3(&mesh->vertex_normal, index);
+            ufbx_vec2 uv = ufbx_get_vertex_vec2(&mesh->vertex_uv, index);;
             
-            v->x = pos.x;
-            v->y = pos.y;
-            v->z = pos.z;
-            v->a = norm.x;
-            v->b = norm.y;
-            v->c = norm.z;
-            
-            //v->uv = ufbx_get_vertex_vec2(&mesh->vertex_uv, index);
+            v->position[0] = pos.x;
+            v->position[1] = pos.y;
+            v->position[2] = pos.z;
+            v->normal[0] = norm.x;
+            v->normal[1] = norm.y;
+            v->normal[2] = norm.z;
+            v->uv[0] = uv.x;
+            v->uv[1] = uv.y;
         }
     }
     
@@ -42,7 +43,7 @@ static ufbx_mesh_piece ufbx_convert_mesh_part(ufbx_mesh_part *part, ufbx_mesh *m
     
     // Generate the index buffer.
     ufbx_vertex_stream streams[1] = {
-        { result.vertices, result.num_vertices, sizeof(ufbx_vertex) },
+        { result.vertices, result.num_vertices, sizeof(mesh_vertex) },
     };
     result.num_indices = num_triangles * 3;
     result.indices = (u16*)c_alloc(result.num_indices * sizeof(u16));

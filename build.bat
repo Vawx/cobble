@@ -5,7 +5,7 @@ IF NOT DEFINED clset (call "C:\Program Files\Microsoft Visual Studio\2022\Commun
 set exe_name="Cobble"
 set build_options=/D "BUILD_WIN32=1" /D "COBBLE_BGFX" /D "COBBLE_UFBX" /D "BX_CONFIG_DEBUG=0" 
 
-set debug_flags=/Od /Oi /GR /Zo /Z7
+set debug_flags=/Oi /GR /Zo /Z7 /FC /GS-
 
 set compile_flags=-nologo -std:c++17 -Zc:__cplusplus -Zc:preprocessor /EHsc /MTd %debug_flags%
 
