@@ -1,6 +1,6 @@
 #include "cobble_shader.h"
 
-static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.texture";
+static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.asset";
 static gfx_handle default_texture_handle;
 
 #define ufbx_to_vec2(v) (vec2){v.x, v.y}
@@ -336,7 +336,7 @@ static void gfx_init() {
     view_make_new((vec3){0.f, 1.f, -5.f}, (vec3){0.f, 0.f, -1.f}, 0.f, 0.f, 1);
     view_set_current_idx(0);
     
-    cobble_dir dir = dir_get_for("cube.mesh", SUBDIR_MESH);
+    cobble_dir dir = dir_get_for("cube.asset", SUBDIR_MESH);
     gfx_load_mesh_asset(&gfx, &dir);
 }
 
@@ -463,7 +463,6 @@ static gfx_handle gfx_load_mesh_asset(gfx_viewer *viewer, const cobble_dir *dir)
     gfx_mesh *mesh = &model->mesh;
     
     mesh->num_parts = mesh_asset.mesh.instances_count;
-    printf("%d\n", mesh->num_parts);
     
     mesh->parts = (gfx_mesh_part*)c_alloc(sizeof(gfx_mesh_part) * mesh->num_parts);
     for(s32 i = 0; i < mesh_asset.mesh.instances_count; ++i) {

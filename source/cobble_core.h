@@ -11,6 +11,9 @@
 static void core_input_callback(sapp_event *event); // used by external systems for input, like IMGUI
 #include "util/cobble_input.h"
 
+#include "util/cobble_log.h"
+#include "util/cobble_log.c"
+
 #include "cobble_serialize.h"
 
 #include "render/cobble_gfx.h"
@@ -34,10 +37,12 @@ static void core_init(void) {
                  .logger.func = slog_func,
              });
     
-    printf("[cobble]: initializing root directory %s\n", root_dir.ptr);
     
+    logger_init();
     gfx_init();
     imgui_init();
+    LOG_TELL("test %d\n", 4);
+    LOG_YELL("testing a yell %d\n", 43423423);
     
     jolt_init();
     jolt_make_dynamic_box(V3(100, 1, 100), V3(0.f, -1, 0), NOT_MOVING);
@@ -83,6 +88,11 @@ static void core_frame(void) {
     
     jolt_step(time.delta);
     
+    static u32 i = 0;
+    LOG_TELL("this is only a test %d\n", i);
+    
+    ++i;
+    
     gfx_frame();
     
     input_frame();
@@ -95,6 +105,7 @@ static void core_frame(void) {
 
 void core_cleanup(void) {
     gfx_end();
+    logger_shutdown();
     sg_shutdown();
 }
 

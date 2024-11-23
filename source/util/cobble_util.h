@@ -80,6 +80,7 @@ static void load_file_async(cobble_dir *dir, void *response_func, u8 *ptr, u64 p
 #define SUBDIR_AUDIO "/content/audio/"
 #define SUBDIR_SHADER_SRC "/content/shader/"
 #define SUBDIR_SHADER_GEN "/source/shader/"
+#define SUBDIR_LOGS "/build/logs/"
 
 typedef enum subdirs {
     NONE_SUBDIR,
@@ -88,7 +89,7 @@ typedef enum subdirs {
     AUDIO_SUBDIR,
     SHADER_SRC_SUBDIR,
     SHADER_GEN_SUBDIR,
-    
+    LOGS_SUBDIR,
     SUBDIRS_COUNT
 } subdirs;
 
@@ -99,6 +100,7 @@ const char *subdir_str[SUBDIRS_COUNT] = {
     SUBDIR_AUDIO,
     SUBDIR_SHADER_SRC,
     SUBDIR_SHADER_GEN,
+    SUBDIR_LOGS,
 };
 
 static u8 dir_valid(const cobble_dir *dir) {
