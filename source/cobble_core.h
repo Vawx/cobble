@@ -21,42 +21,33 @@ static void core_input_callback(sapp_event *event); // used by external systems 
 
 #include "cobble_serialize.c"
 
-typedef struct cobble_time {
+#include "component/cobble_component.h"
+#include "component/cobble_component.c"
+
+typedef struct timing_t {
     r64 delta;
     r64 seconds;
     u64 ticks;
     
     u64 freq;
-} cobble_time;
+} timing_t;
 
-static cobble_time time;
+static timing_t time;
 
 static void core_init(void) {
+    logger_init();
     sg_setup(&(sg_desc){
                  .environment = sglue_environment(),
                  .logger.func = slog_func,
              });
     
+    LOG_TELL("Setting root path to %s\n", root_dir.ptr);
     
-    logger_init();
     gfx_init();
     imgui_init();
-    LOG_TELL("test %d\n", 4);
-    LOG_YELL("testing a yell %d\n", 43423423);
     
     jolt_init();
     jolt_make_dynamic_box(V3(100, 1, 100), V3(0.f, -1, 0), NOT_MOVING);
-#if 0
-    shapes_push_desc(&(shape_description) {
-                         .color = V4(1.f, 1.f, 1.f, 1.f),
-                         .shape_type = SPHERE,
-                         .desc_type = SHAPE_DESC_TYPE_COLORED,
-                         .shape_movement = SHAPE_MOVEMENT_STATIC,
-                         .pos = V3(0.f, -0.5f, 0.f),
-                         .rot = V3d(0.f),
-                         .scale = V3(3, 3, 3)
-                     });
-#endif
     
 #if _WIN32
     LARGE_INTEGER ii;
@@ -87,11 +78,6 @@ static void core_frame(void) {
     sfetch_dowork();
     
     jolt_step(time.delta);
-    
-    static u32 i = 0;
-    LOG_TELL("this is only a test %d\n", i);
-    
-    ++i;
     
     gfx_frame();
     

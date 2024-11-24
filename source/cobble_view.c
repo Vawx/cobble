@@ -1,15 +1,15 @@
 
-static cobble_view views[MAX_COBBLE_VIEWS];
+static view_t views[MAX_VIEWS];
 static u8 views_idx = 0;
 
-static cobble_view *view_current = NULL;
+static view_t *view_current = NULL;
 
-static cobble_view *get_current_view() {
+static view_t *get_current_view() {
     return view_current;
 }
 
-static cobble_view *view_make_new(vec3 pos, vec3 dir, r32 yaw, r32 pitch, u8 input_commanded) {
-    cobble_view *result = &views[views_idx];
+static view_t *view_make_new(vec3 pos, vec3 dir, r32 yaw, r32 pitch, u8 input_commanded) {
+    view_t *result = &views[views_idx];
     glm_vec3_copy(pos, result->pos);
     glm_vec3_copy(dir, result->dir);
     result->yaw = yaw;
@@ -18,12 +18,12 @@ static cobble_view *view_make_new(vec3 pos, vec3 dir, r32 yaw, r32 pitch, u8 inp
     glm_mat4_identity(result->view);
     result->id = views_idx;
     result->is_input_commanded = input_commanded;
-    result->fov = COBBLE_VIEW_DEFAULT_FOV;
+    result->fov = VIEW_DEFAULT_FOV;
     ++views_idx;
     return result;
 }
 
-static void view_set_current(cobble_view *view) {
+static void view_set_current(view_t *view) {
     if(view_current != view) {
         view_current = view;
     }
@@ -34,12 +34,12 @@ static void view_set_current_idx(u8 idx) {
     view_current = &views[idx];
 }
 
-static cobble_view *view_get(u8 idx) {
+static view_t *view_get(u8 idx) {
     c_assert(idx < views_idx);
     return &views[idx];
 }
 
-static void view_update(cobble_view *view, vec2 screen_size) {
+static void view_update(view_t *view, vec2 screen_size) {
     vec3 front;
     front[0] = cos(c_rad(view->yaw)) * cos(c_rad(view->pitch));
     front[1] = sin(c_rad(view->pitch));
@@ -70,54 +70,54 @@ static void view_frame(vec2 screen_size, mat4 *out_view_projection) {
         
         if(is_key_pressed(SAPP_KEYCODE_W) || is_key_held(SAPP_KEYCODE_W)) {
             vec3 new_pos_scaled = {0};
-            glm_vec3_scale(current_dir, COBBLE_VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
+            glm_vec3_scale(current_dir, VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
             glm_vec3_add(current_pos, new_pos_scaled, view_current->pos);
         }
         
         if(is_key_pressed(SAPP_KEYCODE_S) || is_key_held(SAPP_KEYCODE_S)) {
             vec3 new_pos_scaled = {0};
-            glm_vec3_scale(current_dir, COBBLE_VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
+            glm_vec3_scale(current_dir, VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
             glm_vec3_sub(current_pos, new_pos_scaled, view_current->pos);
         }
         
         if(is_key_pressed(SAPP_KEYCODE_A) || is_key_held(SAPP_KEYCODE_A)) {
             vec3 new_pos_scaled = {0};
-            glm_vec3_scale(view_current->right, COBBLE_VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
+            glm_vec3_scale(view_current->right, VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
             glm_vec3_sub(current_pos, new_pos_scaled, view_current->pos);
         }
         
         if(is_key_pressed(SAPP_KEYCODE_D) || is_key_held(SAPP_KEYCODE_D)) {
             vec3 new_pos_scaled = {0};
-            glm_vec3_scale(view_current->right, COBBLE_VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
+            glm_vec3_scale(view_current->right, VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
             glm_vec3_add(current_pos, new_pos_scaled, view_current->pos);
         }
         
         if(is_key_pressed(SAPP_KEYCODE_SPACE) || is_key_held(SAPP_KEYCODE_SPACE)) {
             vec3 new_pos_scaled = {0};
-            glm_vec3_scale(view_current->up, COBBLE_VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
+            glm_vec3_scale(view_current->up, VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
             glm_vec3_add(current_pos, new_pos_scaled, view_current->pos);
         }
         
         if(is_key_pressed(SAPP_KEYCODE_LEFT_CONTROL) || is_key_held(SAPP_KEYCODE_LEFT_CONTROL)) {
             vec3 new_pos_scaled = {0};
-            glm_vec3_scale(view_current->up, COBBLE_VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
+            glm_vec3_scale(view_current->up, VIEW_MOVE_SPEED * 0.033f, new_pos_scaled);
             glm_vec3_sub(current_pos, new_pos_scaled, view_current->pos);
         }
         
         if(is_key_pressed(SAPP_KEYCODE_RIGHT) || is_key_held(SAPP_KEYCODE_RIGHT)) {
-            view_current->yaw += COBBLE_VIEW_ROTATION_SPEED;
+            view_current->yaw += VIEW_ROTATION_SPEED;
         }
         
         if(is_key_pressed(SAPP_KEYCODE_LEFT) || is_key_held(SAPP_KEYCODE_LEFT)) {
-            view_current->yaw -= COBBLE_VIEW_ROTATION_SPEED;
+            view_current->yaw -= VIEW_ROTATION_SPEED;
         }
         
         if(is_key_pressed(SAPP_KEYCODE_UP) || is_key_held(SAPP_KEYCODE_UP)) {
-            view_current->pitch += COBBLE_VIEW_ROTATION_SPEED;
+            view_current->pitch += VIEW_ROTATION_SPEED;
         }
         
         if(is_key_pressed(SAPP_KEYCODE_DOWN) || is_key_held(SAPP_KEYCODE_DOWN)) {
-            view_current->pitch -= COBBLE_VIEW_ROTATION_SPEED;
+            view_current->pitch -= VIEW_ROTATION_SPEED;
         }
         
         static u32 x = 234324324;

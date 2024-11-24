@@ -1,12 +1,12 @@
 #define STB_SPRINTF_IMPLEMENTATION
 #include "stb/stb_sprintf.h"
 
-static cobble_logger logs;
+static logger_t logs;
 
 static void logger_init() {
     logs.ptr = c_alloc(LOGGER_MEMORY_RESERVE);
     logs.ptr_idx = 0;
-    logs.logs = (cobble_log*)c_alloc(sizeof(cobble_log) * LOGGER_LOGS_COUNT);
+    logs.logs = (log_t*)c_alloc(sizeof(log_t) * LOGGER_LOGS_COUNT);
 }
 
 static u32 log_get_system_time_str(char *buffer, char *dest, u8 file_path_output) {
@@ -29,10 +29,17 @@ static u32 log_get_system_time_str(char *buffer, char *dest, u8 file_path_output
     return result_len;
 }
 
-static void log_store_ouput(cobble_log_severity severity, const char *file, const u32 line, const char *str, ...) {
+static void log_store_ouput(log_severity severity, const char *file, const u32 line, const char *str, ...) {
     //TODO(Kyle) check log_idx and ptr_idx for used. if used too much, flush to file and reset.
+    // or, just always flush log to file as it comes in.
     
-    cobble_log *log = &logs.logs[logs.log_idx++]; // increment logs buffer
+    if(logs.log_idx + 1 > LOGGER_LOGS_COUNT || LOGGER_MEMORY_RESERVE - logs.ptr_idx < 255) {
+        logger_shutdown();
+        c_assert_break();
+        // out of space -- if you hit this, fix it.
+    }
+    
+    log_t *log = &logs.logs[logs.log_idx++]; // increment logs buffer
     log->severity = severity;
     log->ptr = &logs.ptr[logs.ptr_idx];
     char *ptr = log->ptr;
@@ -47,6 +54,7 @@ static void log_store_ouput(cobble_log_severity severity, const char *file, cons
     char file_buffer[255] = {0};
     memcpy(file_buffer, file, strlen(file));
     char *file_buffer_ext = strstr(file_buffer, ".");
+    
     while(*file_buffer_ext != '\\' && *file_buffer_ext != '/') {
         *file_buffer_ext--;
     }
@@ -67,11 +75,11 @@ static void log_store_ouput(cobble_log_severity severity, const char *file, cons
     
     HANDLE h_console = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(h_console, colors[severity]);
-    printf("%s", log->ptr);
+    printf("%s\n", log->ptr);
     
     SetConsoleTextAttribute(h_console, 15); // reset console font colors
 #else
-    printf("%s", log->ptr);
+    printf("%s\n", log->ptr);
 #endif
     
     switch(severity) {
@@ -93,11 +101,11 @@ static void logger_shutdown() {
     const char *file_name_ending = ".txt";
     memcpy(ptr, file_name_ending, strlen(file_name_ending));
     
-    cobble_dir dir = dir_get_for(logger_file_name, SUBDIR_LOGS);
+    dir_t dir = dir_get_for(logger_file_name, SUBDIR_LOGS);
     FILE *f = fopen(dir.ptr, "w");
     if(f) {
         for(s32 i = 0; i < logs.log_idx; ++i) {
-            cobble_log *log = &logs.logs[i];
+            log_t *log = &logs.logs[i];
             fwrite(log->ptr, sizeof(u8), log->len, f);
         }
         fclose(f);

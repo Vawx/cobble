@@ -41,6 +41,7 @@ typedef double r64;
 
 #define c_assert_break() (*(int*)0 = 0xABCD)
 #define c_assert(c) stmnt( if (!(c)){ c_assert_break(); } )
+#define c_assert_msg(c, msg, ...) stmnt( if(!(c)){ LOG_SHUTDOWN(msg, ##__VA_ARGS__); c_assert_break(); } )
 
 #define array_count(a) (sizeof(a) / sizeof((a)[0]))
 

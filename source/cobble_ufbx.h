@@ -18,7 +18,7 @@ typedef struct ufbx_mesh_object {
     u32 mesh_pieces_count;
 } ufbx_mesh_object;
 
-static ufbx_mesh_object ufbx_load(const cobble_dir *dir);
+static ufbx_mesh_object ufbx_load(const dir_t *dir);
 
 #define COBBLE_UFBX_H
 #endif //COBBLE_UFBX_H

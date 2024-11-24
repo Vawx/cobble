@@ -1,9 +1,9 @@
 
-static ufbx_mesh_piece ufbx_convert_mesh_part(ufbx_mesh_part *part, ufbx_mesh *mesh) {
-    ufbx_mesh_piece result = {0};
+static gfx_mesh_piece_t ufbx_convert_mesh_part(ufbx_mesh_part *part, ufbx_mesh *mesh) {
+    gfx_mesh_piece_t result = {0};
     
     size_t num_triangles = part->num_triangles;
-    result.vertices = (mesh_vertex*)c_alloc(num_triangles * 3 * sizeof(mesh_vertex));
+    result.vertices = (gfx_vertex_t*)c_alloc(num_triangles * 3 * sizeof(gfx_vertex_t));
     result.num_vertices = 0;
     
     // Reserve space for the maximum triangle indices.
@@ -21,7 +21,7 @@ static ufbx_mesh_piece ufbx_convert_mesh_part(ufbx_mesh_part *part, ufbx_mesh *m
         for (size_t i = 0; i < num_tris * 3; i++) {
             u32 index = tri_indices[i];
             
-            mesh_vertex *v = &result.vertices[result.num_vertices++];
+            gfx_vertex_t *v = &result.vertices[result.num_vertices++];
             ufbx_vec3 pos = ufbx_get_vertex_vec3(&mesh->vertex_position, index);
             ufbx_vec3 norm = ufbx_get_vertex_vec3(&mesh->vertex_normal, index);
             ufbx_vec2 uv = ufbx_get_vertex_vec2(&mesh->vertex_uv, index);;
@@ -43,7 +43,7 @@ static ufbx_mesh_piece ufbx_convert_mesh_part(ufbx_mesh_part *part, ufbx_mesh *m
     
     // Generate the index buffer.
     ufbx_vertex_stream streams[1] = {
-        { result.vertices, result.num_vertices, sizeof(mesh_vertex) },
+        { result.vertices, result.num_vertices, sizeof(gfx_vertex_t) },
     };
     result.num_indices = num_triangles * 3;
     result.indices = (u16*)c_alloc(result.num_indices * sizeof(u16));
@@ -54,10 +54,10 @@ static ufbx_mesh_piece ufbx_convert_mesh_part(ufbx_mesh_part *part, ufbx_mesh *m
     return result;
 }
 
-static ufbx_mesh_object ufbx_load(const cobble_dir *dir) {
+static gfx_mesh_object_t ufbx_load(const dir_t *dir) {
     c_assert(dir->ptr != NULL);
-    ufbx_mesh_object result = {0};
-    result.mesh_pieces = (ufbx_mesh_piece*)c_alloc(sizeof(ufbx_mesh_piece) * UFBX_MAX_PIECES_PER_MESH);
+    gfx_mesh_object_t result = {0};
+    result.mesh_pieces = (gfx_mesh_piece_t*)c_alloc(sizeof(gfx_mesh_piece_t) * UFBX_MAX_PIECES_PER_MESH);
     result.mesh_pieces_count = 0;
     
     ufbx_load_opts opts = {0};
@@ -74,13 +74,13 @@ static ufbx_mesh_object ufbx_load(const cobble_dir *dir) {
         
         for(size_t j = 0; j < mesh->material_parts.count; ++j) {
             ufbx_mesh_part *mesh_part = &mesh->material_parts.data[j];
-            ufbx_mesh_piece piece = ufbx_convert_mesh_part(mesh_part, mesh);
-            memcpy(&result.mesh_pieces[result.mesh_pieces_count++], &piece, sizeof(ufbx_mesh_piece));
+            gfx_mesh_piece_t piece = ufbx_convert_mesh_part(mesh_part, mesh);
+            memcpy(&result.mesh_pieces[result.mesh_pieces_count++], &piece, sizeof(gfx_mesh_piece_t));
         }
         for(size_t j = 0; j < mesh->face_group_parts.count; ++j) {
             ufbx_mesh_part *mesh_part = &mesh->face_group_parts.data[j];
-            ufbx_mesh_piece piece = ufbx_convert_mesh_part(mesh_part, mesh);
-            memcpy(&result.mesh_pieces[result.mesh_pieces_count++], &piece, sizeof(ufbx_mesh_piece));
+            gfx_mesh_piece_t piece = ufbx_convert_mesh_part(mesh_part, mesh);
+            memcpy(&result.mesh_pieces[result.mesh_pieces_count++], &piece, sizeof(gfx_mesh_piece_t));
         }
     }
     

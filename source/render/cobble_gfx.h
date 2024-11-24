@@ -13,41 +13,31 @@ typedef enum gfx_handle_type {
     GFX_HANDLE_TEXTURE,
 } gfx_handle_type;
 
-typedef struct gfx_handle {
+typedef struct gfx_handle_t {
     gfx_handle_type type;
     s32 id;
-} gfx_handle;
+} gfx_handle_t;
 
-typedef struct mesh_vertex {
+typedef struct gfx_vertex_t {
     vec3 position;
 	vec3 normal;
 	vec2 uv;
     r32 f_vertex_index;
-} mesh_vertex;
+} gfx_vertex_t;
 
-typedef struct ufbx_mesh_piece {
-    mesh_vertex *vertices;
+typedef struct ufbx_mesh_piece_t {
+    gfx_vertex_t *vertices;
     u32 num_vertices;
     u16 *indices;
     u32 num_indices;
-} ufbx_mesh_piece;
+} gfx_mesh_piece_t;
 
-typedef struct ufbx_mesh_object {
-    ufbx_mesh_piece *mesh_pieces;
+typedef struct gfx_mesh_object_t {
+    gfx_mesh_piece_t *mesh_pieces;
     u32 mesh_pieces_count;
-} ufbx_mesh_object;
+} gfx_mesh_object_t;
 
-typedef struct gfx_node {
-    u32 parent_index;
-    
-	mat4 geometry_to_node;
-	mat4 node_to_parent;
-	mat4 node_to_world;
-	mat4 geometry_to_world;
-	mat4 normal_to_world;
-} gfx_node;
-
-typedef struct gfx_mesh_part {
+typedef struct gfx_mesh_part_t {
     sg_buffer vertex_buffer;
     sg_buffer index_buffer;
 	u32 num_indices;
@@ -61,7 +51,7 @@ typedef struct gfx_mesh_part {
     u32 vertices_size;
     u8 *indices;
     u32 indices_size;
-} gfx_mesh_part;
+} gfx_mesh_part_t;
 
 typedef enum gfx_texture_type {
     GFX_TEXTURE_DIFFUSE,
@@ -69,7 +59,7 @@ typedef enum gfx_texture_type {
     GFX_TEXTURE_COUNT
 } gfx_texture_type;
 
-typedef struct gfx_texture {
+typedef struct gfx_texture_t {
     gfx_texture_type type;
     sg_image image;
     sg_sampler sampler;
@@ -80,80 +70,72 @@ typedef struct gfx_texture {
     u32 c;
     
     u64 file_hash;
-} gfx_texture;
+} gfx_texture_t;
 
 typedef enum gfx_model_movement_type {
     GFX_MOVEMENT_STATIC,
     GFX_MOVEMENT_DYNAMIC,
 } gfx_model_movement_type;
 
-typedef struct gfx_mesh {
+typedef struct gfx_mesh_t {
     s32 *indices;
     u32 num_indices; // TODO(Kyle) figure out what these are actually for.
     
-	gfx_mesh_part *parts;
+	gfx_mesh_part_t *parts;
     u32 num_parts;
     
 	bool aabb_is_local;
 	vec3 aabb_min;
 	vec3 aabb_max;
-} gfx_mesh;
+} gfx_mesh_t;
 
-typedef struct gfx_model {
-    gfx_mesh  mesh;
+typedef struct gfx_model_t {
+    gfx_mesh_t  mesh;
     gfx_model_movement_type movement_type;
-    gfx_handle texture_handles[GFX_TEXTURE_COUNT];
-    
-    vec3 position;
-    vec3 rotation;
-    vec3 scale;
-} gfx_model;
+    gfx_handle_t texture_handles[GFX_TEXTURE_COUNT];
+    u64 file_hash;
+} gfx_model_t;
 
-typedef struct gfx_scene {
-    gfx_model *models;
+typedef struct gfx_scene_t {
+    gfx_model_t *models;
     u32 model_idx;
     
-    gfx_texture *textures;
+    gfx_texture_t *textures;
     u32 texture_idx;
     
 	vec3 aabb_min;
 	vec3 aabb_max;
     
     u8 initialized;
-} gfx_scene;
+} gfx_scene_t;
 
-typedef struct gfx_static_draw {
+typedef struct gfx_static_draw_t {
     sg_shader shader;
 	sg_pipeline pipeline;
-} gfx_static_draw;
+} gfx_static_draw_t;
 
-typedef struct gfx_shadow_draw {
+typedef struct gfx_shadow_draw_t {
     sg_shader shader;
 	sg_pipeline pipeline;
-} gfx_shadow_draw;
+} gfx_shadow_draw_t;
 
 #define GFX_MAX_SCENE_COUNT_PER_VIEWER kilo(2)
 #define GFX_MAX_TEXTURES_PER_VIEWER kilo(1)
 #define GFX_MAX_MODELS_PER_VIEWER kilo(1)
-typedef struct gfx_viewer {
-    gfx_scene *scenes;
+typedef struct gfx_viewer_t {
+    gfx_scene_t *scenes;
     u32 scenes_idx;
     u32 scenes_current;
     
-    gfx_static_draw static_draw;
-    gfx_shadow_draw shadow_draw;
-} gfx_viewer;
+    gfx_static_draw_t static_draw;
+    gfx_shadow_draw_t shadow_draw;
+} gfx_viewer_t;
 
-static void gfx_set_model_position(gfx_model *model, vec3 pos);
-static void gfx_set_model_rotation(gfx_model *model, vec3 rot);
-static void gfx_set_model_scale(gfx_model *model, vec3 scale);
+static gfx_model_t *gfx_retrieve_asset(gfx_viewer_t *viewer, gfx_handle_t *handle);
 
-static void gfx_load_scene(gfx_scene *vs, const cobble_dir *dir, u8 keep_raw_data);
-static gfx_handle gfx_load_mesh(gfx_viewer *viewer, const cobble_dir *dir, u8 keep_raw_data);
-static gfx_handle gfx_load_texture(gfx_viewer *viewer, const cobble_dir *dir);
-
-static gfx_handle gfx_load_texture_asset(gfx_viewer *viewer, const cobble_dir *dir);
-static gfx_handle gfx_load_mesh_asset(gfx_viewer *viewer, const cobble_dir *dir);
+static void gfx_load_scene(gfx_scene_t *vs, const dir_t *dir, u8 keep_raw_data);
+static gfx_handle_t gfx_load_texture_asset(gfx_viewer_t *viewer, const dir_t *dir);
+static gfx_handle_t gfx_load_mesh_asset(gfx_viewer_t *viewer, const dir_t *dir);
 
 static void gfx_init();
 static void gfx_frame();

@@ -1,7 +1,7 @@
 
-static asset_texture asset_generate_texture(const cobble_dir *dir) {
+static asset_texture_t asset_generate_texture(const dir_t *dir) {
     c_assert(dir->ptr != NULL);
-    asset_texture result = {0};
+    asset_texture_t result = {0};
     
     const u8 DESIRED_CHANNELS = 4;
     result.desired_channels = DESIRED_CHANNELS;
@@ -10,25 +10,25 @@ static asset_texture asset_generate_texture(const cobble_dir *dir) {
     return result;
 }
 
-static asset_mesh asset_generate_mesh(const cobble_dir *dir) {
+static asset_mesh_t asset_generate_mesh(const dir_t *dir) {
     c_assert(dir->ptr != NULL);
-    asset_mesh result = {0};
+    asset_mesh_t result = {0};
     
-    gfx_scene *scene = &gfx.scenes[gfx.scenes_current];
+    gfx_scene_t *scene = &gfx.scenes[gfx.scenes_current];
     gfx_load_scene(scene, dir, true);
     
     u32 num_parts = 0;
     for(s32 i = 0; i < scene->model_idx; ++i) {
-        gfx_model *model = &scene->models[i];
+        gfx_model_t *model = &scene->models[i];
         num_parts += model->mesh.num_parts;
     }
     
-    result.instances = (asset_mesh_instance*)c_alloc(sizeof(asset_mesh_instance) * num_parts);
+    result.instances = (asset_mesh_instance_t*)c_alloc(sizeof(asset_mesh_instance_t) * num_parts);
     result.instances_count = num_parts;
     for(s32 i = 0; i < scene->model_idx; ++i) {
-        gfx_model *model = &scene->models[i];
+        gfx_model_t *model = &scene->models[i];
         for(s32 j = 0; j < model->mesh.num_parts; ++j) {
-            gfx_mesh_part *part = &model->mesh.parts[j];
+            gfx_mesh_part_t *part = &model->mesh.parts[j];
             result.instances[j].vertices = part->vertices;
             result.instances[j].vertices_size = part->vertices_size;
             
@@ -39,7 +39,7 @@ static asset_mesh asset_generate_mesh(const cobble_dir *dir) {
     return result;
 }
 
-static asset_type asset_type_from_path(const cobble_dir *dir) {
+static asset_type asset_type_from_path(const dir_t *dir) {
     for(s32 i = 0; i < SUBDIRS_COUNT; ++i) {
         char *ptr = strstr(dir->ptr, subdir_str[i]);
         if(ptr && (subdirs)i != NONE_SUBDIR) {
@@ -49,11 +49,13 @@ static asset_type asset_type_from_path(const cobble_dir *dir) {
     return ASSET_TYPE_NONE;
 }
 
-static asset asset_make(const cobble_dir *dir) {
+static asset_t asset_make(const dir_t *dir) {
     // TODO(Kyle): make sure this asset doesnt already exist.
     // if it does, notify and ask to replace/override it.
     
-    asset asset = {0};
+    LOG_TELL("making new asset %s", dir->ptr);
+    
+    asset_t asset = {0};
     asset.type = asset_type_from_path(dir);
     c_assert(asset.type != ASSET_TYPE_NONE);
     
@@ -79,7 +81,7 @@ static asset asset_make(const cobble_dir *dir) {
     return asset;
 }
 
-static bool asset_save(const cobble_dir *dir, asset *in_asset) {
+static bool asset_save(const dir_t *dir, asset_t *in_asset) {
     c_assert(dir->ptr != NULL);
     
     FILE *f = fopen(dir->ptr, "wb");
@@ -99,7 +101,7 @@ static bool asset_save(const cobble_dir *dir, asset *in_asset) {
                 fwrite(&in_asset->mesh.instances_count, sizeof(u32), 1, f);
                 
                 for(s32 i = 0; i < in_asset->mesh.instances_count; ++i) {
-                    asset_mesh_instance *instance = &in_asset->mesh.instances[i];
+                    asset_mesh_instance_t *instance = &in_asset->mesh.instances[i];
                     fwrite(&instance->vertices_size, sizeof(u32), 1, f);
                     fwrite(&instance->indices_size, sizeof(u32), 1, f);
                     fwrite(instance->vertices, sizeof(u8), instance->vertices_size, f);
@@ -125,9 +127,9 @@ static bool asset_save(const cobble_dir *dir, asset *in_asset) {
 #define ASSIGN_AND_INCREMENT_BY_TYPE_SIZE(p, v, t) (v) = *(t*)p; p += sizeof(v)
 #define ASSIGN_AND_INCREMENT_BY_PTR_SIZE(p, v, t, s) (v) = (t*)p; p += s
 
-static asset asset_load(const cobble_dir *dir) {
+static asset_t asset_load(const dir_t *dir) {
     c_assert(dir->ptr != NULL);
-    asset asset = {0};
+    asset_t asset = {0};
     
     FILE *f = fopen(dir->ptr, "rb");
     if(f) {
@@ -152,9 +154,9 @@ static asset asset_load(const cobble_dir *dir) {
             } break;
             case ASSET_TYPE_MESH: {
                 ASSIGN_AND_INCREMENT_BY_TYPE_SIZE(ptr_cpy, asset.mesh.instances_count, u32);
-                asset.mesh.instances = (asset_mesh_instance*)c_alloc(sizeof(asset_mesh_instance) * asset.mesh.instances_count);
+                asset.mesh.instances = (asset_mesh_instance_t*)c_alloc(sizeof(asset_mesh_instance_t) * asset.mesh.instances_count);
                 for(s32 i = 0; i < asset.mesh.instances_count; ++i) {
-                    asset_mesh_instance *instance = &asset.mesh.instances[i];
+                    asset_mesh_instance_t *instance = &asset.mesh.instances[i];
                     
                     ASSIGN_AND_INCREMENT_BY_TYPE_SIZE(ptr_cpy, instance->vertices_size, u32);
                     ASSIGN_AND_INCREMENT_BY_TYPE_SIZE(ptr_cpy, instance->indices_size, u32);

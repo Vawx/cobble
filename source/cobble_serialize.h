@@ -11,37 +11,37 @@ typedef enum asset_type {
     ASSET_TYPE_SHADER_GEN,
 } asset_type;
 
-typedef struct {
+typedef struct asset_mesh_instance_t {
     u32 vertices_size;
     u32 indices_size;
     u8 *vertices;
     u8 *indices;
-} asset_mesh_instance;
+} asset_mesh_instance_t;
 
-typedef struct {
+typedef struct asset_mesh_t {
     u32 instances_count;
-    asset_mesh_instance *instances;
-} asset_mesh;
+    asset_mesh_instance_t *instances;
+} asset_mesh_t;
 
-typedef struct {
+typedef struct asset_texture_t {
     u32 w;
     u32 h;
     u32 channels;
     u32 desired_channels;
     u8 *ptr;
-} asset_texture;
+} asset_texture_t;
 
-typedef struct asset {
+typedef struct asset_t {
     asset_type type;
     u64 file_hash;
     union {
-        asset_mesh mesh;
-        asset_texture texture;
+        asset_mesh_t mesh;
+        asset_texture_t texture;
     };
-} asset;
+} asset_t;
 
-static asset asset_make(const cobble_dir *dir);
-static asset asset_load(const cobble_dir *dir);
+static asset_t asset_make(const dir_t *dir);
+static asset_t asset_load(const dir_t *dir);
 
 #define COBBLE_SERIALIZE_H
 #endif //COBBLE_SERIALIZE_H

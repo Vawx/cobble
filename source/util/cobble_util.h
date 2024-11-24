@@ -16,15 +16,15 @@
 typedef struct{
     char ptr[DIRECTORY_MAX_LEN];
     u32 len;
-} cobble_dir;
+} dir_t;
 
 typedef struct {
     u8 *ptr;
     u32 len;
-    cobble_dir dir;
-} cobble_file;
+    dir_t dir;
+} file_t;
 
-static cobble_dir root_dir;
+static dir_t root_dir;
 
 static void root_dir_init(const char *ptr) {
     static u8 ran = false;
@@ -44,13 +44,13 @@ static void root_dir_init(const char *ptr) {
     }
 }
 
-static cobble_file load_file(cobble_dir *dir) {
+static file_t load_file(dir_t *dir) {
     c_assert(dir->ptr != NULL);
     
     FILE *f = fopen(dir->ptr, "rb");
     c_assert(f != NULL);
     
-    cobble_file result = {0};
+    file_t result = {0};
     fseek(f, 0, SEEK_END);
     result.len = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -63,7 +63,7 @@ static cobble_file load_file(cobble_dir *dir) {
 }
 
 // expected response func sig: void response_callback(const sfetch_response_t* response)
-static void load_file_async(cobble_dir *dir, void *response_func, u8 *ptr, u64 ptr_size) {
+static void load_file_async(dir_t *dir, void *response_func, u8 *ptr, u64 ptr_size) {
     sfetch_send(&(sfetch_request_t) {
                     .path = dir->ptr,
                     .callback = response_func,
@@ -103,12 +103,12 @@ const char *subdir_str[SUBDIRS_COUNT] = {
     SUBDIR_LOGS,
 };
 
-static u8 dir_valid(const cobble_dir *dir) {
+static u8 dir_valid(const dir_t *dir) {
     return &dir->ptr[0] != NULL && dir->len > 0;
 }
 
-static cobble_dir dir_get_for(const char *file_name, const char *subdir) {
-    cobble_dir dir = {0};
+static dir_t dir_get_for(const char *file_name, const char *subdir) {
+    dir_t dir = {0};
     char *ptr = dir.ptr;
     u32 len = root_dir.len;
     memcpy(ptr, root_dir.ptr, len);
@@ -273,7 +273,6 @@ static m4 M4d(r32 d) {
 
 #define vec3_min(a, b) (vec3){c_min(a[0], b[0]), c_min(a[1], b[1]), c_min(a[2], b[2])}
 #define vec3_max(a, b) (vec3){c_max(a[0], b[0]), c_max(a[1], b[1]), c_max(a[2], b[2])}
-
 
 // MurmurHash64B (see: https://github.com/aappleby/smhasher/blob/61a0530f28277f2e850bfc39600ce61d02b518de/src/MurmurHash2.cpp#L142)
 const u64 WGPU_HASH_SEED = 2340923481023;
