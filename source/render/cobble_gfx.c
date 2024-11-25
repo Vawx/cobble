@@ -1,5 +1,8 @@
 #include "cobble_shader.h"
 
+static gfx_static_draw_t static_draw;
+static gfx_shadow_draw_t shadow_draw;
+
 static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.asset";
 static gfx_handle_t default_texture_handle;
 
@@ -20,7 +23,7 @@ static const sg_vertex_layout_state mesh_vertex_layout = {
 	},
 };
 
-static gfx_viewer_t gfx;
+static gfx_viewer_buffer_t gfx_views;
 
 static void read_mesh(gfx_mesh_t *vmesh, ufbx_mesh *mesh, u8 keep_raw_data) {
 	// Count the number of needed parts and temporary buffers
@@ -316,39 +319,40 @@ static void gfx_set_scene_by_id(gfx_viewer_t *viewer, const u32 idx) {
 }
 
 static void gfx_init() {
-    gfx_set_scene_by_id(&gfx, 0);
+    
+    gfx_set_scene_by_id(&gfx_views.views[gfx_views.views_idx], VIEW_TYPE_DEFAULT);
+    gfx_views.views_idx = 1; // init one view
     
     sg_backend backend = sg_query_backend();
     
-	gfx.static_draw.shader = sg_make_shader(static_lit_shader_desc(backend));
-	gfx.static_draw.pipeline = sg_make_pipeline(&(sg_pipeline_desc){
-                                                    .shader = gfx.static_draw.shader,
-                                                    .layout = mesh_vertex_layout,
-                                                    .index_type = SG_INDEXTYPE_UINT32,
-                                                    .face_winding = SG_FACEWINDING_CCW,
-                                                    .cull_mode = SG_CULLMODE_BACK,
-                                                    .depth = {
-                                                        .compare = SG_COMPAREFUNC_LESS_EQUAL,
-                                                        .write_enabled = true,
-                                                    },
-                                                });
+	static_draw.shader = sg_make_shader(static_lit_shader_desc(backend));
+	static_draw.pipeline = sg_make_pipeline(&(sg_pipeline_desc){
+                                                .shader = static_draw.shader,
+                                                .layout = mesh_vertex_layout,
+                                                .index_type = SG_INDEXTYPE_UINT32,
+                                                .face_winding = SG_FACEWINDING_CCW,
+                                                .cull_mode = SG_CULLMODE_BACK,
+                                                .depth = {
+                                                    .compare = SG_COMPAREFUNC_LESS_EQUAL,
+                                                    .write_enabled = true,
+                                                },
+                                            });
     
     dir_t default_diffuse_dir = dir_get_for(DEFAULT_DIFFUSE_NAME, SUBDIR_TEXTURE);
-    default_texture_handle = gfx_load_texture_asset(&gfx, &default_diffuse_dir);
+    default_texture_handle = gfx_load_texture_asset(&gfx_views.views[VIEW_TYPE_DEFAULT], &default_diffuse_dir);
     
     view_make_new((vec3){0.f, 1.f, -5.f}, (vec3){0.f, 0.f, -1.f}, 0.f, 0.f, 1);
     view_set_current_idx(0);
     
     dir_t dir = dir_get_for("cube.asset", SUBDIR_MESH);
-    gfx_handle_t h = gfx_load_mesh_asset(&gfx, &dir);
+    gfx_handle_t h = gfx_load_mesh_asset(&gfx_views.views[VIEW_TYPE_DEFAULT], &dir);
     
-    gfx_model_t *m = gfx_retrieve_asset(&gfx, &h);
+    gfx_model_t *m = gfx_retrieve_asset(&gfx_views.views[VIEW_TYPE_DEFAULT], &h);
     printf("");
 }
 
 static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model) {
-    sg_apply_pipeline(view->static_draw.pipeline);
-	
+    
     view_t *v = get_current_view();
     MAT4(proj_view);
     glm_mat4_mul(v->projection, v->view, proj_view);
@@ -398,7 +402,7 @@ static void gfx_draw_scene(gfx_viewer_t *viewer) {
         gfx_scene_t *scene = &viewer->scenes[li];
         for (size_t mi = 0; mi < scene->model_idx; mi++) {
             gfx_model_t *model = &scene->models[mi];
-            draw_mesh(&gfx, model);
+            draw_mesh(&gfx_views.views[VIEW_TYPE_DEFAULT], model);
         }
     }
 }
@@ -415,8 +419,11 @@ static void gfx_frame() {
 		},
 	};
     sg_begin_pass(&(sg_pass){.action = action, .swapchain = sglue_swapchain()});
+    sg_apply_pipeline(static_draw.pipeline);
     
-    gfx_draw_scene(&gfx);
+    for(s32 i = 0; i < gfx_views.views_idx; ++i) {
+        gfx_draw_scene(&gfx_views.views[i]);
+    }
     
     sg_end_pass();
     sg_commit();
@@ -442,6 +449,10 @@ static gfx_model_t *gfx_retrieve_asset(gfx_viewer_t *viewer, gfx_handle_t *handl
 
 static void gfx_set_model_movement_type(gfx_model_t *model, gfx_model_movement_type type) {
     model->movement_type = type;
+}
+
+static void gfx_push_to_render(gfx_model_handle_t *handle, vec3 pos, vec3 rot, vec3 scale) {
+    
 }
 
 static gfx_handle_t gfx_load_mesh_asset(gfx_viewer_t *viewer, const dir_t *dir) {
@@ -507,10 +518,20 @@ static gfx_handle_t gfx_load_mesh_asset(gfx_viewer_t *viewer, const dir_t *dir) 
     return result;
 }
 
+static gfx_model_handle_t gfx_make_model_handle(const dir_t *dir) {
+    gfx_model_handle_t handle = {0};
+    
+    return handle;
+}
+
+static gfx_model_handle_t gfx_make_model_handle_from_specific_view(const dir_t *dir, gfx_viewer_t *viewer) {
+    
+}
+
 static gfx_handle_t gfx_load_texture_asset(gfx_viewer_t *viewer, const dir_t *dir) {
     c_assert(dir_valid(dir));
     
-    LOG_TELL("loading texture asset %s\n", dir->ptr);
+    LOG_TELL("loading texture asset %s", dir->ptr);
     
     gfx_handle_t result = {-1};
     result.type = GFX_HANDLE_TEXTURE;

@@ -39,9 +39,16 @@ typedef struct entity_buffer_t {
 } entity_buffer_t;
 
 static void entity_init();
+static void entity_frame();
+static void entity_shutdown();
+
 static entity_t *entity_make();
 static void entity_store(entity_t *e);
 static void entity_delete(entity_t *e);
+
+static void entity_push_component(entity_t *e, component_t *comp);
+static void entity_pop_component(entity_t *e);
+static void entity_remove_component(entity_t *e, component_t *comp);
 
 #define COBBLE_COMPONENT_H
 #endif //COBBLE_COMPONENT_H

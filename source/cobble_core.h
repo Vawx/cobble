@@ -41,7 +41,7 @@ static void core_init(void) {
                  .logger.func = slog_func,
              });
     
-    LOG_TELL("Setting root path to %s\n", root_dir.ptr);
+    LOG_TELL("Setting root path to %s", root_dir.ptr);
     
     gfx_init();
     imgui_init();

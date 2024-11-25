@@ -33,6 +33,9 @@ static void log_store_ouput(log_severity severity, const char *file, const u32 l
     //TODO(Kyle) check log_idx and ptr_idx for used. if used too much, flush to file and reset.
     // or, just always flush log to file as it comes in.
     
+    char *ttt = strstr(str, "\n");
+    if(ttt) c_assert_break();
+    
     if(logs.log_idx + 1 > LOGGER_LOGS_COUNT || LOGGER_MEMORY_RESERVE - logs.ptr_idx < 255) {
         logger_shutdown();
         c_assert_break();
