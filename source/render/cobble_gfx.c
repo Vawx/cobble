@@ -296,8 +296,8 @@ static void gfx_load_scene(gfx_scene_t *vs, const dir_t *dir, u8 keep_raw_data) 
 	ufbx_free_scene(scene);
 }
 
-static void gfx_set_scene_by_id(gfx_viewer_t *viewer, const u32 idx) {
-    c_assert(idx < GFX_MAX_SCENE_COUNT_PER_VIEWER); // unsigned so always 0 or greater.
+static void gfx_set_scene_by_id(gfx_viewer_t *viewer, u32 idx) {
+    c_assert(idx < GFX_MAX_SCENE_COUNT_PER_VIEWER);
     
     if(viewer->scenes == NULL) {
         viewer->scenes = (gfx_scene_t*)c_alloc(sizeof(gfx_scene_t) * GFX_MAX_SCENE_COUNT_PER_VIEWER);
@@ -305,6 +305,7 @@ static void gfx_set_scene_by_id(gfx_viewer_t *viewer, const u32 idx) {
         viewer->scenes_current = 0;
     }
     
+    viewer->scenes_current = idx;
     gfx_scene_t *id_scene = &viewer->scenes[idx];
     if(!id_scene->initialized) {
         id_scene->models = (gfx_model_t*)c_alloc(GFX_MAX_MODELS_PER_VIEWER * sizeof(gfx_model_t));
@@ -314,14 +315,13 @@ static void gfx_set_scene_by_id(gfx_viewer_t *viewer, const u32 idx) {
         id_scene->initialized = 1;
     }
     
-    viewer->scenes_current = idx;
+    
     LOG_TELL("new scene ID %d", idx);
 }
 
 static void gfx_init() {
-    
-    gfx_set_scene_by_id(&gfx_views.views[gfx_views.views_idx], VIEW_TYPE_DEFAULT);
-    gfx_views.views_idx = 1; // init one view
+    gfx_set_scene_by_id(&gfx_views.views[gfx_views.selected_view_type], 0);
+    gfx_views.selected_view_type = VIEW_TYPE_DEFAULT; // init default view
     
     sg_backend backend = sg_query_backend();
     
@@ -339,16 +339,10 @@ static void gfx_init() {
                                             });
     
     dir_t default_diffuse_dir = dir_get_for(DEFAULT_DIFFUSE_NAME, SUBDIR_TEXTURE);
-    default_texture_handle = gfx_load_texture_asset(&gfx_views.views[VIEW_TYPE_DEFAULT], &default_diffuse_dir);
+    default_texture_handle = gfx_load_texture_asset(&gfx_views.views[gfx_views.selected_view_type], &default_diffuse_dir);
     
     view_make_new((vec3){0.f, 1.f, -5.f}, (vec3){0.f, 0.f, -1.f}, 0.f, 0.f, 1);
     view_set_current_idx(0);
-    
-    dir_t dir = dir_get_for("cube.asset", SUBDIR_MESH);
-    gfx_handle_t h = gfx_load_mesh_asset(&gfx_views.views[VIEW_TYPE_DEFAULT], &dir);
-    
-    gfx_model_t *m = gfx_retrieve_asset(&gfx_views.views[VIEW_TYPE_DEFAULT], &h);
-    printf("");
 }
 
 static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model) {
@@ -375,7 +369,6 @@ static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model) {
     
     mesh_ubo.f_num_blend_shapes = 0.f;
     
-    
 	sg_apply_uniforms(0, SG_RANGE_REF(mesh_ubo));
     
 	for (size_t pi = 0; pi < model->mesh.num_parts; pi++) {
@@ -393,7 +386,7 @@ static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model) {
 		};
         
 		sg_apply_bindings(&binds);
-		sg_draw(0, (int)part->num_indices, 1);
+		sg_draw(0, (s32)part->num_indices, 1);
 	}
 }
 
@@ -402,7 +395,7 @@ static void gfx_draw_scene(gfx_viewer_t *viewer) {
         gfx_scene_t *scene = &viewer->scenes[li];
         for (size_t mi = 0; mi < scene->model_idx; mi++) {
             gfx_model_t *model = &scene->models[mi];
-            draw_mesh(&gfx_views.views[VIEW_TYPE_DEFAULT], model);
+            draw_mesh(viewer, model);
         }
     }
 }
@@ -421,7 +414,7 @@ static void gfx_frame() {
     sg_begin_pass(&(sg_pass){.action = action, .swapchain = sglue_swapchain()});
     sg_apply_pipeline(static_draw.pipeline);
     
-    for(s32 i = 0; i < gfx_views.views_idx; ++i) {
+    for(s32 i = 0; i <= gfx_views.selected_view_type; ++i) {
         gfx_draw_scene(&gfx_views.views[i]);
     }
     
@@ -449,10 +442,6 @@ static gfx_model_t *gfx_retrieve_asset(gfx_viewer_t *viewer, gfx_handle_t *handl
 
 static void gfx_set_model_movement_type(gfx_model_t *model, gfx_model_movement_type type) {
     model->movement_type = type;
-}
-
-static void gfx_push_to_render(gfx_model_handle_t *handle, vec3 pos, vec3 rot, vec3 scale) {
-    
 }
 
 static gfx_handle_t gfx_load_mesh_asset(gfx_viewer_t *viewer, const dir_t *dir) {
@@ -520,12 +509,33 @@ static gfx_handle_t gfx_load_mesh_asset(gfx_viewer_t *viewer, const dir_t *dir) 
 
 static gfx_model_handle_t gfx_make_model_handle(const dir_t *dir) {
     gfx_model_handle_t handle = {0};
-    
+    handle.view_handle.id = gfx_views.selected_view_type;
+    handle.scene_handle.id = gfx_views.views[handle.view_handle.id].scenes_idx;
+    handle.mesh_handle = gfx_load_mesh_asset(&gfx_views.views[handle.view_handle.id], dir);
     return handle;
 }
 
 static gfx_model_handle_t gfx_make_model_handle_from_specific_view(const dir_t *dir, gfx_viewer_t *viewer) {
+    gfx_model_handle_t handle = {0};
+    gfx_viewer_t *found_viewer = NULL;
     
+    s32 handle_id = 0;
+    for(; handle_id < VIEW_TYPE_COUNT; ++handle_id) {
+        if(viewer == &gfx_views.views[handle_id]) {
+            found_viewer = &gfx_views.views[handle_id];
+            break;
+        }
+    }
+    
+    handle.view_handle.id = handle_id;
+    handle.mesh_handle = gfx_load_mesh_asset(found_viewer, dir);
+    return handle;
+}
+
+static void gfx_push_model_to_render(const gfx_model_handle_t *handle) {
+    u32 view_handle = handle->view_id;
+    u32 mesh_handle = handle->mesh_id;
+    u32 scene_handle = handle->scene_id;
 }
 
 static gfx_handle_t gfx_load_texture_asset(gfx_viewer_t *viewer, const dir_t *dir) {

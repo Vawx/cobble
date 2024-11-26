@@ -143,6 +143,16 @@ static void c_free(u8 *ptr) {
 }
 #endif
 
+static void c_memcpy(void *dest, void *src, u32 size) {
+    u8 *dest_ptr = (u8*)dest;
+    u8 *src_ptr = (u8*)src;
+    u8 *temp = src_ptr;
+    u32 c = 0;
+    while(c++ != size) {
+        *dest_ptr++ = *temp++;
+    }
+}
+
 // math types that are easier to assign and pass around
 // conversions to cglm below
 typedef union {
@@ -273,6 +283,13 @@ static m4 M4d(r32 d) {
 
 #define vec3_min(a, b) (vec3){c_min(a[0], b[0]), c_min(a[1], b[1]), c_min(a[2], b[2])}
 #define vec3_max(a, b) (vec3){c_max(a[0], b[0]), c_max(a[1], b[1]), c_max(a[2], b[2])}
+
+static void m4_to_mat4(const m4 *a, mat4 out) {
+    c_memcpy(out[0], &a->elements[0], sizeof(r32) * 4);
+    c_memcpy(out[1], &a->elements[1], sizeof(r32) * 4);
+    c_memcpy(out[2], &a->elements[2], sizeof(r32) * 4);
+    c_memcpy(out[3], &a->elements[3], sizeof(r32) * 4);
+}
 
 // MurmurHash64B (see: https://github.com/aappleby/smhasher/blob/61a0530f28277f2e850bfc39600ce61d02b518de/src/MurmurHash2.cpp#L142)
 const u64 WGPU_HASH_SEED = 2340923481023;

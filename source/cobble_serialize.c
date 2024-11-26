@@ -14,7 +14,7 @@ static asset_mesh_t asset_generate_mesh(const dir_t *dir) {
     c_assert(dir->ptr != NULL);
     asset_mesh_t result = {0};
     
-    gfx_viewer_t *current_view = &gfx_views.views[gfx_views.views_idx];
+    gfx_viewer_t *current_view = &gfx_views.views[gfx_views.selected_view_type];
     gfx_scene_t *scene = &current_view->scenes[current_view->scenes_current];
     gfx_load_scene(scene, dir, true);
     

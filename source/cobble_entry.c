@@ -19,11 +19,11 @@
 #include "cimgui/cimgui.h"
 
 #include "cobble_types.h"
-#include "util/cobble_util.h"
-
-#include "cobble_jolt.h"
 
 #include "cglm/cglm.h"
+#include "util/cobble_util.h"
+#include "cobble_jolt.c"
+
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "sokol_log.h"

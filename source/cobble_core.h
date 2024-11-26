@@ -19,10 +19,10 @@ static void core_input_callback(sapp_event *event); // used by external systems 
 #include "render/cobble_gfx.h"
 #include "render/cobble_gfx.c"
 
-#include "cobble_serialize.c"
+#include "entity/cobble_entity.h"
+#include "entity/cobble_entity.c"
 
-#include "component/cobble_component.h"
-#include "component/cobble_component.c"
+#include "cobble_serialize.c"
 
 typedef struct timing_t {
     r64 delta;
@@ -44,6 +44,7 @@ static void core_init(void) {
     LOG_TELL("Setting root path to %s", root_dir.ptr);
     
     gfx_init();
+    entity_init();
     imgui_init();
     
     jolt_init();
@@ -61,6 +62,13 @@ static void core_init(void) {
                      .num_lanes = 1,
                      .logger.func = slog_func,
                  });
+    
+    
+    entity_t *entity = entity_make_positioned((vec3){0.f, 10.f, 20.f}, (vec3){0.f, 0.f, 0.f}, (vec3){1.f, 1.f, 1.f});
+    component_t *comp = entity_push_component(entity, COMPONENT_TYPE_MESH);
+    
+    dir_t dir = dir_get_for("cube.asset", SUBDIR_MESH);
+    component_mesh_assign(comp, &dir);
 }
 
 #if _WIN32

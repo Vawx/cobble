@@ -31,8 +31,18 @@ typedef struct gfx_handle_t {
 } gfx_handle_t;
 
 typedef struct gfx_model_handle_t {
-    gfx_handle_t view_handle;
-    gfx_handle_t mesh_handle;
+    union {
+        struct {
+            gfx_handle_t view_handle;
+            gfx_handle_t scene_handle;
+            gfx_handle_t mesh_handle;
+        };
+        struct {
+            s32 view_id;
+            s32 scene_id;
+            s32 mesh_id;
+        };
+    };
 } gfx_model_handle_t;
 
 typedef struct gfx_vertex_t {
@@ -120,6 +130,9 @@ typedef struct gfx_scene_t {
     gfx_texture_t *textures;
     u32 texture_idx;
     
+    gfx_model_t *models_frame; // models to render in frame. 
+    u32 models_frame_idx;
+    
 	vec3 aabb_min;
 	vec3 aabb_max;
     
@@ -146,8 +159,9 @@ typedef struct gfx_viewer_t {
 } gfx_viewer_t;
 
 typedef struct gfx_viewer_buffer_t {
-    gfx_viewer_t views[VIEW_TYPE_COUNT]; // Note(Kyle) this is entirely arbitrary and if scenes need more than 8, change this.
-    u8 views_idx;
+    // Note(Kyle) this is entirely arbitrary and if scenes need more than 8 (VIEWS_TYPE_COUNT), change this.
+    gfx_viewer_t views[VIEW_TYPE_COUNT]; 
+    gfx_view_type selected_view_type;
 } gfx_viewer_buffer_t;
 
 static gfx_model_t *gfx_retrieve_asset(gfx_viewer_t *viewer, gfx_handle_t *handle);
@@ -159,7 +173,7 @@ static gfx_handle_t gfx_load_mesh_asset(gfx_viewer_t *viewer, const dir_t *dir);
 static gfx_model_handle_t gfx_make_model_handle(const dir_t *dir);
 static gfx_model_handle_t gfx_make_model_handle_from_specific_view(const dir_t *dir, gfx_viewer_t *viewer);
 
-static void gfx_push_to_render(gfx_model_handle_t *model_handle, vec3 pos, vec3 rot, vec3 scale);
+static void gfx_push_model_to_render(const gfx_model_handle_t *handle);
 
 static void gfx_init();
 static void gfx_frame();
