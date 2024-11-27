@@ -6,6 +6,9 @@ static gfx_shadow_draw_t shadow_draw;
 static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.asset";
 static gfx_handle_t default_texture_handle;
 
+static gfx_push_event_t *push_events;
+static u32 push_events_idx;
+
 #define ufbx_to_vec2(v) (vec2){v.x, v.y}
 #define ufbx_to_vec3(v) (vec3){v.x, v.y, v.z}
 #define ufbx_to_mat4(m) (mat4){m.m00, m.m01, m.m02, m.m03, m.m10, m.m11, m.m12, m.m13, m.m20, m.m21, m.m22, m.m23, 0, 0, 0, 1,}
@@ -320,6 +323,9 @@ static void gfx_set_scene_by_id(gfx_viewer_t *viewer, u32 idx) {
 }
 
 static void gfx_init() {
+    push_events = (gfx_push_event_t*)c_alloc(sizeof(gfx_push_event_t) * kilo(1)); 
+    push_events_idx = 0;
+    
     gfx_set_scene_by_id(&gfx_views.views[gfx_views.selected_view_type], 0);
     gfx_views.selected_view_type = VIEW_TYPE_DEFAULT; // init default view
     
@@ -345,7 +351,7 @@ static void gfx_init() {
     view_set_current_idx(0);
 }
 
-static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model) {
+static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model, mat4 mat) {
     
     view_t *v = get_current_view();
     MAT4(proj_view);
@@ -357,15 +363,8 @@ static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model) {
     glm_mat4_copy(ident, mesh_ubo.normal_to_world);
     glm_mat4_copy(ident, mesh_ubo.geometry_to_world);
     
-    // point at which this mesh needs pos, rot, and scale data. currently using imported info, not game/content info.
     glm_mat4_identity(mesh_ubo.world_to_clip); // default mat4
-    // translate
-    // rotate
-    // scale
-    glm_scale(mesh_ubo.world_to_clip, (vec3){1.f, 1.f, 1.f});
-    
-    // multiply with proj_view to get model_view_projection (mvp) for shader uniform.
-    glm_mat4_mul(proj_view, mesh_ubo.world_to_clip, mesh_ubo.world_to_clip);
+    glm_mat4_mul(proj_view, mesh_ubo.world_to_clip, mat);
     
     mesh_ubo.f_num_blend_shapes = 0.f;
     
@@ -391,12 +390,11 @@ static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model) {
 }
 
 static void gfx_draw_scene(gfx_viewer_t *viewer) {
-    for(size_t li = 0; li < viewer->scenes_idx; ++li) {
-        gfx_scene_t *scene = &viewer->scenes[li];
-        for (size_t mi = 0; mi < scene->model_idx; mi++) {
-            gfx_model_t *model = &scene->models[mi];
-            draw_mesh(viewer, model);
-        }
+    for(s32 i = 0; i < push_events_idx; ++i) {
+        gfx_push_event_t *e = &push_events[i];
+        gfx_scene_t *scene = &viewer->scenes[e->model_handle->scene_id];
+        gfx_model_t *model = &scene->models[e->model_handle->mesh_id];
+        draw_mesh(viewer, model, e->model_matrix);
     }
 }
 
@@ -420,6 +418,8 @@ static void gfx_frame() {
     
     sg_end_pass();
     sg_commit();
+    
+    push_events_idx = 0;
 }
 
 static void gfx_end() {
@@ -532,10 +532,8 @@ static gfx_model_handle_t gfx_make_model_handle_from_specific_view(const dir_t *
     return handle;
 }
 
-static void gfx_push_model_to_render(const gfx_model_handle_t *handle) {
-    u32 view_handle = handle->view_id;
-    u32 mesh_handle = handle->mesh_id;
-    u32 scene_handle = handle->scene_id;
+static void gfx_push_event(gfx_push_event_t *e) {
+    memcpy(&push_events[push_events_idx], e, sizeof(gfx_push_event_t));
 }
 
 static gfx_handle_t gfx_load_texture_asset(gfx_viewer_t *viewer, const dir_t *dir) {
