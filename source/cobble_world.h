@@ -2,14 +2,6 @@
 
 #if !defined(COBBLE_WORLD_H)
 
-typedef enum componnet_type {
-    COMPONENT_TYPE_NONE,
-    COMPONENT_TYPE_MESH,
-    COMPONENT_TYPE_SIMULATED,
-    
-    COMPONENT_TYPE_COUNT;
-} component_type;
-
 typedef struct entity_t {
     union {
         struct {
@@ -24,6 +16,7 @@ typedef struct entity_t {
     s32 id;
 } entity_t;
 
+#define WORLD_DEFAULT_ENTITY_COUNT kilo(1)
 typedef struct entity_buffer_t {
     entity_t *entities;
     u32 idx;
@@ -42,16 +35,18 @@ typedef struct view_t {
     r32 pitch;
 } view_t;
 
-typedef struct view_buffter_t {
+#define WORLD_DEFAULT_VIEW_COUNT 8
+typedef struct view_buffer_t {
     view_t *views;
     u32 idx;
     u32 count;
-} view_buffter_t;
+} view_buffer_t;
 
 typedef struct scene_t {
     view_buffer_t views;
 } scene_t;
 
+#define WORLD_DEFAULT_SCENE_COUNT 8
 typedef struct scene_buffer_t {
     scene_t *scenes;
     u32 idx;
@@ -63,7 +58,12 @@ typedef struct scene_buffer_t {
 // each _world_ holds n_scenes
 typedef struct world_t {
     scene_buffer_t scenes;
+    u32 current_scene;
 } world_t;
+
+static entity_t *world_make_entity(entity_buffer_t *entities);
+static view_t *world_make_view(view_buffer_t *views);
+static scene_t *world_make_scene(scene_buffer_t *scenes);
 
 static void world_init();
 static void world_frame();

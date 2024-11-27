@@ -19,6 +19,9 @@ static void core_input_callback(sapp_event *event); // used by external systems 
 #include "render/cobble_gfx.h"
 #include "render/cobble_gfx.c"
 
+#include "cobble_world.h"
+#include "cobble_world.c"
+
 #include "cobble_serialize.c"
 
 typedef struct timing_t {

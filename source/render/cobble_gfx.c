@@ -6,9 +6,6 @@ static gfx_shadow_draw_t shadow_draw;
 static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.asset";
 static gfx_handle_t default_texture_handle;
 
-static gfx_push_event_t *push_events;
-static u32 push_events_idx;
-
 #define ufbx_to_vec2(v) (vec2){v.x, v.y}
 #define ufbx_to_vec3(v) (vec3){v.x, v.y, v.z}
 #define ufbx_to_mat4(m) (mat4){m.m00, m.m01, m.m02, m.m03, m.m10, m.m11, m.m12, m.m13, m.m20, m.m21, m.m22, m.m23, 0, 0, 0, 1,}
@@ -25,8 +22,6 @@ static const sg_vertex_layout_state mesh_vertex_layout = {
 		{ .buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT },
 	},
 };
-
-static gfx_viewer_buffer_t gfx_views;
 
 static void read_mesh(gfx_mesh_t *vmesh, ufbx_mesh *mesh, u8 keep_raw_data) {
 	// Count the number of needed parts and temporary buffers
@@ -299,36 +294,7 @@ static void gfx_load_scene(gfx_scene_t *vs, const dir_t *dir, u8 keep_raw_data) 
 	ufbx_free_scene(scene);
 }
 
-static void gfx_set_scene_by_id(gfx_viewer_t *viewer, u32 idx) {
-    c_assert(idx < GFX_MAX_SCENE_COUNT_PER_VIEWER);
-    
-    if(viewer->scenes == NULL) {
-        viewer->scenes = (gfx_scene_t*)c_alloc(sizeof(gfx_scene_t) * GFX_MAX_SCENE_COUNT_PER_VIEWER);
-        viewer->scenes_idx = 1; // TODO(Kyle) this is set to one as we have a global "gfx" view. change it when we are using more than one.
-        viewer->scenes_current = 0;
-    }
-    
-    viewer->scenes_current = idx;
-    gfx_scene_t *id_scene = &viewer->scenes[idx];
-    if(!id_scene->initialized) {
-        id_scene->models = (gfx_model_t*)c_alloc(GFX_MAX_MODELS_PER_VIEWER * sizeof(gfx_model_t));
-        id_scene->textures = (gfx_texture_t*)c_alloc(GFX_MAX_TEXTURES_PER_VIEWER * sizeof(gfx_texture_t));
-        id_scene->model_idx = 0;
-        id_scene->texture_idx = 0;
-        id_scene->initialized = 1;
-    }
-    
-    
-    LOG_TELL("new scene ID %d", idx);
-}
-
 static void gfx_init() {
-    push_events = (gfx_push_event_t*)c_alloc(sizeof(gfx_push_event_t) * kilo(1)); 
-    push_events_idx = 0;
-    
-    gfx_set_scene_by_id(&gfx_views.views[gfx_views.selected_view_type], 0);
-    gfx_views.selected_view_type = VIEW_TYPE_DEFAULT; // init default view
-    
     sg_backend backend = sg_query_backend();
     
 	static_draw.shader = sg_make_shader(static_lit_shader_desc(backend));
@@ -343,16 +309,10 @@ static void gfx_init() {
                                                     .write_enabled = true,
                                                 },
                                             });
-    
-    dir_t default_diffuse_dir = dir_get_for(DEFAULT_DIFFUSE_NAME, SUBDIR_TEXTURE);
-    default_texture_handle = gfx_load_texture_asset(&gfx_views.views[gfx_views.selected_view_type], &default_diffuse_dir);
-    
-    view_make_new((vec3){0.f, 1.f, -5.f}, (vec3){0.f, 0.f, -1.f}, 0.f, 0.f, 1);
-    view_set_current_idx(0);
 }
 
-static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model, mat4 mat) {
-    
+static void draw_mesh() {
+    /*
     view_t *v = get_current_view();
     MAT4(proj_view);
     glm_mat4_mul(v->projection, v->view, proj_view);
@@ -387,23 +347,14 @@ static void draw_mesh(gfx_viewer_t *view, gfx_model_t *model, mat4 mat) {
 		sg_apply_bindings(&binds);
 		sg_draw(0, (s32)part->num_indices, 1);
 	}
+*/
 }
 
-static void gfx_draw_scene(gfx_viewer_t *viewer) {
-    for(s32 i = 0; i < push_events_idx; ++i) {
-        gfx_push_event_t *e = &push_events[i];
-        gfx_scene_t *scene = &viewer->scenes[e->model_handle->scene_id];
-        gfx_model_t *model = &scene->models[e->model_handle->mesh_id];
-        draw_mesh(viewer, model, e->model_matrix);
-    }
+static void gfx_draw_scene() {
 }
 
 static void gfx_frame() {
-    vec2 screen_size = {sapp_widthf(), sapp_heightf()};
-    MAT4(out_view_proj);
-    view_frame(screen_size, &out_view_proj);
-    
-	sg_pass_action action = {
+    sg_pass_action action = {
 		.colors[0] = {
 			.load_action = SG_LOADACTION_CLEAR,
 			.clear_value = { 0.1f, 0.1f, 0.1f },
@@ -412,178 +363,13 @@ static void gfx_frame() {
     sg_begin_pass(&(sg_pass){.action = action, .swapchain = sglue_swapchain()});
     sg_apply_pipeline(static_draw.pipeline);
     
-    for(s32 i = 0; i <= gfx_views.selected_view_type; ++i) {
-        gfx_draw_scene(&gfx_views.views[i]);
-    }
-    
     sg_end_pass();
     sg_commit();
-    
-    push_events_idx = 0;
 }
 
 static void gfx_end() {
     
 }
 
-static gfx_model_t *gfx_retrieve_asset(gfx_viewer_t *viewer, gfx_handle_t *handle) {
-    c_assert(handle->id >= 0);
-    switch(handle->type) {
-        case GFX_HANDLE_TEXTURE: {
-            // TODO: Kyle
-        } break;
-        case GFX_HANDLE_MODEL: {
-            return &viewer->scenes[viewer->scenes_current].models[handle->id];
-        } break;
-        
-    }
-    return NULL;
-}
-
-static void gfx_set_model_movement_type(gfx_model_t *model, gfx_model_movement_type type) {
-    model->movement_type = type;
-}
-
-static gfx_handle_t gfx_load_mesh_asset(gfx_viewer_t *viewer, const dir_t *dir) {
-    c_assert(dir_valid(dir));
-    gfx_handle_t result = {0};
-    
-    LOG_TELL("loading mesh asset %s", dir->ptr);
-    
-    asset_t mesh_asset = asset_load(dir);
-    c_assert(mesh_asset.type == ASSET_TYPE_MESH);
-    
-    // does this asset already exist? if so, return that back.
-    u64 dir_hash = wgpu_hash(dir->ptr, dir->len);
-    for(s32 i = 0; i < viewer->scenes_idx; ++i) {
-        for(s32 j = 0; j < viewer->scenes[i].model_idx; ++j) {
-            gfx_model_t *model = &viewer->scenes[i].models[j];
-            if(model->file_hash == dir_hash) {
-                result.id = j;
-                return result;
-            }
-        }
-    }
-    
-    gfx_scene_t *scene = &viewer->scenes[viewer->scenes_current];
-    c_assert(scene->initialized);
-    
-    result.id = scene->model_idx;
-    gfx_model_t *model = &scene->models[scene->model_idx];
-    ++scene->model_idx;
-    
-    model->file_hash = dir_hash;
-    gfx_mesh_t *mesh = &model->mesh;
-    
-    mesh->num_parts = mesh_asset.mesh.instances_count;
-    
-    mesh->parts = (gfx_mesh_part_t*)c_alloc(sizeof(gfx_mesh_part_t) * mesh->num_parts);
-    for(s32 i = 0; i < mesh_asset.mesh.instances_count; ++i) {
-        // since we are loading this mesh from an asset, we can take the data directly
-        
-        // these are used for importing and should be moved from parts.
-        mesh->parts[i].vertices = NULL;
-        mesh->parts[i].vertices_size = 0;
-        mesh->parts[i].indices = NULL;
-        mesh->parts[i].indices_size = 0;
-        
-        // actual data
-        mesh->parts[i].num_indices = mesh_asset.mesh.instances[i].indices_size / sizeof(u32);
-        mesh->parts[i].indices_size = mesh_asset.mesh.instances[i].indices_size;
-        mesh->parts[i].vertices_size = mesh_asset.mesh.instances[i].vertices_size;
-        
-        mesh->parts[i].index_buffer = sg_make_buffer(&(sg_buffer_desc){
-                                                         .size = mesh_asset.mesh.instances[i].indices_size,
-                                                         .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                         .data = { mesh_asset.mesh.instances[i].indices, mesh_asset.mesh.instances[i].indices_size },
-                                                     });
-        mesh->parts[i].vertex_buffer = sg_make_buffer(&(sg_buffer_desc){
-                                                          .size = mesh_asset.mesh.instances[i].vertices_size,
-                                                          .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                                                          .data = { mesh_asset.mesh.instances[i].vertices, mesh_asset.mesh.instances[i].vertices_size },
-                                                      });
-    }
-    result.type = GFX_HANDLE_MODEL;
-    return result;
-}
-
-static gfx_model_handle_t gfx_make_model_handle(const dir_t *dir) {
-    gfx_model_handle_t handle = {0};
-    handle.view_handle.id = gfx_views.selected_view_type;
-    handle.scene_handle.id = gfx_views.views[handle.view_handle.id].scenes_idx;
-    handle.mesh_handle = gfx_load_mesh_asset(&gfx_views.views[handle.view_handle.id], dir);
-    return handle;
-}
-
-static gfx_model_handle_t gfx_make_model_handle_from_specific_view(const dir_t *dir, gfx_viewer_t *viewer) {
-    gfx_model_handle_t handle = {0};
-    gfx_viewer_t *found_viewer = NULL;
-    
-    s32 handle_id = 0;
-    for(; handle_id < VIEW_TYPE_COUNT; ++handle_id) {
-        if(viewer == &gfx_views.views[handle_id]) {
-            found_viewer = &gfx_views.views[handle_id];
-            break;
-        }
-    }
-    
-    handle.view_handle.id = handle_id;
-    handle.mesh_handle = gfx_load_mesh_asset(found_viewer, dir);
-    return handle;
-}
-
-static void gfx_push_event(gfx_push_event_t *e) {
-    memcpy(&push_events[push_events_idx], e, sizeof(gfx_push_event_t));
-}
-
-static gfx_handle_t gfx_load_texture_asset(gfx_viewer_t *viewer, const dir_t *dir) {
-    c_assert(dir_valid(dir));
-    
-    LOG_TELL("loading texture asset %s", dir->ptr);
-    
-    gfx_handle_t result = {-1};
-    result.type = GFX_HANDLE_TEXTURE;
-    
-    gfx_scene_t *current_scene = &viewer->scenes[viewer->scenes_current];
-    c_assert(current_scene->initialized);
-    
-    // check if asset exists
-    u64 hash = wgpu_hash(dir->ptr, dir->len);
-    for(s32 i = 0; i < viewer->scenes[viewer->scenes_current].texture_idx; ++i) {
-        if(viewer->scenes[viewer->scenes_current].textures[i].file_hash == hash) {
-            result.id = i;
-            return result; // found it, return it
-        }
-    }
-    
-    asset_t texture_asset = asset_load(dir);
-    c_assert(texture_asset.type == ASSET_TYPE_TEXTURE);
-    
-    // asset not found already loaded, load and bind.
-    result.id = current_scene->texture_idx;
-    
-    gfx_texture_t *texture = &current_scene->textures[current_scene->texture_idx++]; // increments the viewer texture buffer here
-    glm_vec2_copy(texture->tiling, (vec2){1.f, 1.f});
-    
-    texture->file_hash = texture_asset.file_hash;
-    texture->image = sg_alloc_image();
-    sg_init_image(texture->image, &(sg_image_desc){
-                      .width = texture_asset.texture.w,
-                      .height = texture_asset.texture.h,
-                      .pixel_format = SG_PIXELFORMAT_RGBA8,
-                      .data.subimage[0][0] = {
-                          .ptr = texture_asset.texture.ptr,
-                          .size = (size_t)(texture_asset.texture.w * texture_asset.texture.h * texture_asset.texture.desired_channels),
-                      }
-                  });
-    texture->sampler = sg_make_sampler(&(sg_sampler_desc) {
-                                           .min_filter = SG_FILTER_LINEAR,
-                                           .mag_filter = SG_FILTER_LINEAR,
-                                       });
-    result.type = GFX_HANDLE_TEXTURE;
-    return result;
-}
-
-#include "cobble_view.c"
 #include "cobble_render_imgui.c"
 #include "cobble_ufbx.c"

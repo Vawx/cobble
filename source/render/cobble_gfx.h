@@ -2,20 +2,7 @@
 
 #if !defined(COBBLE_GFX_H)
 
-#include "cobble_view.h"
 #include "ufbx/ufbx.h"
-
-typedef enum gfx_view_type {
-    VIEW_TYPE_DEFAULT,
-    VIEW_TYPE_ONE,
-    VIEW_TYPE_TWO,
-    VIEW_TYPE_THREE,
-    VIEW_TYPE_FOUR,
-    VIEW_TYPE_FIVE,
-    VIEW_TYPE_SIX,
-    VIEW_TYPE_SEVEN,
-    VIEW_TYPE_COUNT,
-} gfx_view_type;
 
 #define UFBX_MAX_PIECES_PER_MESH 8
 
@@ -29,21 +16,6 @@ typedef struct gfx_handle_t {
     gfx_handle_type type;
     s32 id;
 } gfx_handle_t;
-
-typedef struct gfx_model_handle_t {
-    union {
-        struct {
-            gfx_handle_t view_handle;
-            gfx_handle_t scene_handle;
-            gfx_handle_t mesh_handle;
-        };
-        struct {
-            s32 view_id;
-            s32 scene_id;
-            s32 mesh_id;
-        };
-    };
-} gfx_model_handle_t;
 
 typedef struct gfx_vertex_t {
     vec3 position;
@@ -148,37 +120,6 @@ typedef struct gfx_shadow_draw_t {
     sg_shader shader;
 	sg_pipeline pipeline;
 } gfx_shadow_draw_t;
-
-#define GFX_MAX_SCENE_COUNT_PER_VIEWER kilo(2)
-#define GFX_MAX_TEXTURES_PER_VIEWER kilo(1)
-#define GFX_MAX_MODELS_PER_VIEWER kilo(1)
-typedef struct gfx_viewer_t {
-    gfx_scene_t *scenes;
-    u32 scenes_idx;
-    u32 scenes_current;
-} gfx_viewer_t;
-
-typedef struct gfx_viewer_buffer_t {
-    // Note(Kyle) this is entirely arbitrary and if scenes need more than 8 (VIEWS_TYPE_COUNT), change this.
-    gfx_viewer_t views[VIEW_TYPE_COUNT]; 
-    gfx_view_type selected_view_type;
-} gfx_viewer_buffer_t;
-
-typedef struct gfx_push_event_t {
-    gfx_model_handle_t *model_handle;
-    mat4 model_matrix;
-} gfx_push_event_t;
-
-static gfx_model_t *gfx_retrieve_asset(gfx_viewer_t *viewer, gfx_handle_t *handle);
-
-static void gfx_load_scene(gfx_scene_t *vs, const dir_t *dir, u8 keep_raw_data);
-static gfx_handle_t gfx_load_texture_asset(gfx_viewer_t *viewer, const dir_t *dir);
-static gfx_handle_t gfx_load_mesh_asset(gfx_viewer_t *viewer, const dir_t *dir);
-
-static gfx_model_handle_t gfx_make_model_handle(const dir_t *dir);
-static gfx_model_handle_t gfx_make_model_handle_from_specific_view(const dir_t *dir, gfx_viewer_t *viewer);
-
-static void gfx_push_event(gfx_push_event_t *e);
 
 static void gfx_init();
 static void gfx_frame();

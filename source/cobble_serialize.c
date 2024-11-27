@@ -3,10 +3,6 @@ static asset_texture_t asset_generate_texture(const dir_t *dir) {
     c_assert(dir->ptr != NULL);
     asset_texture_t result = {0};
     
-    const u8 DESIRED_CHANNELS = 4;
-    result.desired_channels = DESIRED_CHANNELS;
-    result.ptr = stbi_load(dir->ptr, &result.w, &result.h, &result.channels, DESIRED_CHANNELS);
-    c_assert(result.ptr != NULL);
     return result;
 }
 
@@ -14,29 +10,6 @@ static asset_mesh_t asset_generate_mesh(const dir_t *dir) {
     c_assert(dir->ptr != NULL);
     asset_mesh_t result = {0};
     
-    gfx_viewer_t *current_view = &gfx_views.views[gfx_views.selected_view_type];
-    gfx_scene_t *scene = &current_view->scenes[current_view->scenes_current];
-    gfx_load_scene(scene, dir, true);
-    
-    u32 num_parts = 0;
-    for(s32 i = 0; i < scene->model_idx; ++i) {
-        gfx_model_t *model = &scene->models[i];
-        num_parts += model->mesh.num_parts;
-    }
-    
-    result.instances = (asset_mesh_instance_t*)c_alloc(sizeof(asset_mesh_instance_t) * num_parts);
-    result.instances_count = num_parts;
-    for(s32 i = 0; i < scene->model_idx; ++i) {
-        gfx_model_t *model = &scene->models[i];
-        for(s32 j = 0; j < model->mesh.num_parts; ++j) {
-            gfx_mesh_part_t *part = &model->mesh.parts[j];
-            result.instances[j].vertices = part->vertices;
-            result.instances[j].vertices_size = part->vertices_size;
-            
-            result.instances[j].indices = part->indices;
-            result.instances[j].indices_size = part->indices_size;
-        }
-    }
     return result;
 }
 
