@@ -131,7 +131,7 @@ typedef struct viewer_node {
 	um_mat geometry_to_world;
 	um_mat normal_to_world;
 } viewer_node;
-
+`
 typedef struct viewer_blend_channel {
 	float weight;
 } viewer_blend_channel;

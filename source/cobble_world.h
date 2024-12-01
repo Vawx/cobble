@@ -1,69 +1,58 @@
-/* cobble_world.h : date = November 27th 2024 2:07 pm */
+/* cobble_world.h : date = November 29th 2024 9:40 pm */
 
 #if !defined(COBBLE_WORLD_H)
 
-typedef struct entity_t {
+typedef enum component_type {
+    COMPONENT_TYPE_MESH,
+    COMPONENT_TYPE_PHYSICS,
+    
+    COMPONENT_TYPE_COUNT
+} component_type;
+
+typedef struct component_t {
+    component_type type;
     union {
         struct {
-            vec3 position;
-            vec3 rotation;
-            vec3 scale;
-        };
+            gfx_handle_t gfx_handle;
+        } mesh;
         struct {
-            mat4 matrix;
-        };
+            JPH_BodyID *id;
+        } physics;
     };
-    s32 id;
-} entity_t;
+    s32 entity_id; // owner id
+} component_t;
 
-#define WORLD_DEFAULT_ENTITY_COUNT kilo(1)
-typedef struct entity_buffer_t {
-    entity_t *entities;
+#define COMPONENT_INITIAL_COUNT mega(1)// NOTE(Kyle): odds we actually use this much?
+typedef struct component_system_buffer_t {
+    component_type type;
+    component_t *components;
     u32 idx;
     u32 count;
-} entity_buffer_t;
+} component_system_buffer_t;
 
-typedef struct view_t {
-    mat4 projection;
-    mat4 view;
+#define ENTITY_INITIAL_COUNT kilo(1)
+typedef struct entity_t {
+    u32 id;
     
     vec3 position;
-    vec3 forward;
-    vec3 right;
-    vec3 up;
-    r32 yaw;
-    r32 pitch;
-} view_t;
+    vec3 rotation;
+    vec3 scale;
+} entity_t;
+TYPE_BUFFER(entity_t);
 
-#define WORLD_DEFAULT_VIEW_COUNT 8
-typedef struct view_buffer_t {
-    view_t *views;
-    u32 idx;
-    u32 count;
-} view_buffer_t;
+typedef void (*component_system)(const component_t *components, const u32 count);
 
-typedef struct scene_t {
-    view_buffer_t views;
-} scene_t;
-
-#define WORLD_DEFAULT_SCENE_COUNT 8
-typedef struct scene_buffer_t {
-    scene_t *scenes;
-    u32 idx;
-    u32 count;
-    entity_buffer_t entities;
-} scene_buffer_t;
-
-// each _scene_ holds n-views _and_ n-entities.
-// each _world_ holds n_scenes
 typedef struct world_t {
-    scene_buffer_t scenes;
-    u32 current_scene;
+    component_system_buffer_t system_components[COMPONENT_TYPE_COUNT];
+    entity_t_buffer_t entities;
+    component_system system[COMPONENT_TYPE_COUNT];
 } world_t;
 
-static entity_t *world_make_entity(entity_buffer_t *entities);
-static view_t *world_make_view(view_buffer_t *views);
-static scene_t *world_make_scene(scene_buffer_t *scenes);
+static entity_t *world_make_entity();
+
+static component_t *world_make_component(entity_t *entity, component_type type);
+static void world_init_component_mesh(component_t *comp, const dir_t *directory);
+static void world_init_component_physics(component_t *comp);
 
 static void world_init();
 static void world_frame();

@@ -4,21 +4,55 @@
 
 #include "ufbx/ufbx.h"
 
-#define UFBX_MAX_PIECES_PER_MESH 8
+typedef struct mesh_vertex_t {
+    vec3 position;
+    vec3 normal;
+    vec3 uv;
+    r32 f_vertex_index;
+} gfx_mesh_vertex_t;
 
-typedef struct ufbx_mesh_piece {
-    mesh_vertex *vertices;
-    u32 num_vertices;
-    u16 *indices;
-    u32 num_indices;
-} ufbx_mesh_piece;
+typedef struct ufbx_mesh_part_t {
+    gfx_handle_t obj_handle;
+    u32 material_index;
+} ufbx_mesh_part_t;
 
-typedef struct ufbx_mesh_object {
-    ufbx_mesh_piece *mesh_pieces;
-    u32 mesh_pieces_count;
-} ufbx_mesh_object;
+typedef struct ufbx_mesh_t {
+    u32 *instance_node_indices;
+    u32 num_instances;
+    
+	ufbx_mesh_part_t *parts;
+    u32 num_parts;
+    
+    u8 aabb_is_local;
+	vec3 aabb_min;
+	vec3 aabb_max;
+} ufbx_mesh_t;
 
-static ufbx_mesh_object ufbx_load(const dir_t *dir);
+typedef struct ufbx_node_t {
+    u32 parent_index;
+	mat4 geometry_to_node;
+	mat4 node_to_parent;
+	mat4 node_to_world;
+	mat4 geometry_to_world;
+	mat4 normal_to_world;
+} ufbx_node_t;
+
+#define UFBX_MODEL_DEFAULT_COUNT kilo(1)
+typedef struct ufbx_model_t {
+	ufbx_node_t *nodes;
+    u32 num_nodes;
+    
+    ufbx_mesh_t *meshes;
+	u32 num_meshes;
+    
+	vec3 aabb_min;
+	vec3 aabb_max;
+    
+    u64 file_hash;
+} ufbx_model_t;
+TYPE_BUFFER(ufbx_model_t);
+
+static gfx_handle_t gfx_load_model_fbx(dir_t *dir);
 
 #define COBBLE_UFBX_H
 #endif //COBBLE_UFBX_H

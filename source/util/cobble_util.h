@@ -330,6 +330,56 @@ u64 wgpu_hash(const void *key, int len) {
     return h;
 }
 
+static u64 dir_hash(const dir_t *dir) {
+    return wgpu_hash(dir->ptr, dir->len);
+}
+
+#define TYPE_BUFFER(v) typedef struct v##_buffer_t { v *ptr; u32 idx; u32 count; } v##_buffer_t; 
+
+static void vec3_transform_point(const mat4 a, vec3 b, vec3 r) {
+	r32 a1 = a[0][0] * b[0];
+    r32 a2 = a[0][1] * b[1];
+    r32 a3 = a[0][2] * b[2];
+    r32 a4 = a[0][3];
+    
+    r32 b1 = a[1][0] * b[0];
+    r32 b2 = a[1][1] * b[1];
+    r32 b3 = a[1][2] * b[2];
+    r32 b4 = a[1][3];
+    
+    r32 c1 = a[2][0] * b[0];
+    r32 c2 = a[2][1] * b[1];
+    r32 c3 = a[2][2] * b[2];
+    r32 c4 = a[2][3];
+    
+    r[0] = a1 + a1 + a3 + a4;
+    r[1] = b1 + b2 + b3 + b4;
+    r[2] = c1 + c2 + c3 + c4;
+}
+
+static void vec3_transform_extent(const mat4 a, vec3 b, vec3 r) {
+	r32 a1 = abs(a[0][0]) * b[0];
+    r32 a2 = abs(a[0][1]) * b[1];
+    r32 a3 = abs(a[0][2]) * b[2];
+    
+    r32 b1 = abs(a[1][0]) * b[0];
+    r32 b2 = abs(a[1][1]) * b[1];
+    r32 b3 = abs(a[1][2]) * b[2];
+    
+    r32 c1 = abs(a[2][0]) * b[0];
+    r32 c2 = abs(a[2][1]) * b[1];
+    r32 c3 = abs(a[2][2]) * b[2];
+    
+    r[0] = a1 + a1 + a3;
+    r[1] = b1 + b2 + b3;
+    r[2] = c1 + c2 + c3;
+}
+
+static void vec3_mulf(const vec3 a, r32 b, vec3 dest) {
+    dest[0] = a[0] * b;
+    dest[1] = a[1] * b;
+    dest[2] = a[2] * b;
+}
 
 #define COBBLE_UTIL_H
 #endif //COBBLE_UTIL_H

@@ -40,8 +40,16 @@ typedef struct asset_t {
     };
 } asset_t;
 
-static asset_t asset_make(const dir_t *dir);
-static asset_t asset_load(const dir_t *dir);
+#define ASSET_BUFFER_INIT_COUNT kilo(1)
+typedef struct asset_buffer_t {
+    asset_t *ptr;
+    u32 idx;
+    u32 count;
+} asset_buffer_t;
+
+static void asset_init();
+static asset_t *asset_make(const dir_t *dir);
+static asset_t *asset_load(const dir_t *dir);
 
 #define COBBLE_SERIALIZE_H
 #endif //COBBLE_SERIALIZE_H
