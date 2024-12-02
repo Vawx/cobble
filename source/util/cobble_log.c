@@ -3,12 +3,6 @@
 
 static logger_t logs;
 
-static void logger_init() {
-    logs.ptr = c_alloc(LOGGER_MEMORY_RESERVE);
-    logs.ptr_idx = 0;
-    logs.logs = (log_t*)c_alloc(sizeof(log_t) * LOGGER_LOGS_COUNT);
-}
-
 static u32 log_get_system_time_str(char *buffer, char *dest, u8 file_path_output) {
     u32 result_len = 0;
 #if _WIN32 // TODO(Kyle) other os's
@@ -113,4 +107,11 @@ static void logger_shutdown() {
         }
         fclose(f);
     }
+}
+
+static void logger_init() {
+    logs.ptr = c_alloc(LOGGER_MEMORY_RESERVE);
+    logs.ptr_idx = 0;
+    logs.logs = (log_t*)c_alloc(sizeof(log_t) * LOGGER_LOGS_COUNT);
+    LOG_TELL("logger enabled");
 }

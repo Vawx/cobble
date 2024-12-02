@@ -96,8 +96,8 @@ static void gfx_read_mesh(ufbx_mesh_t *vmesh, ufbx_mesh *mesh, u64 file_hash) {
 		ufbx_error error;
 		u32 num_vertices = ufbx_generate_indices(streams, num_streams, indices, num_indices, NULL, &error);
 		if (error.type != UFBX_ERROR_NONE) {
-			LOG_YELL("Failed to generate index buffer %d", error);
-		}
+			LOG_PANIC("Failed to generate index buffer %s", error.description);
+        }
         
 		if (mesh_part->index < mesh->materials.count) {
 			ufbx_material *material =  mesh->materials.data[mesh_part->index];
@@ -219,12 +219,12 @@ static gfx_handle_t gfx_load_model_fbx(dir_t *dir) {
 	ufbx_error error;
 	ufbx_scene *scene = ufbx_load_file(dir->ptr, &opts, &error);
 	if (!scene) {
-		LOG_YELL("Failed to load scene %d", error);
+		LOG_PANIC("Failed to load scene %s", error.description);
         gfx_handle_t r = {-1};
 		return r;
 	}
     
-    model->file_hash = wgpu_hash(dir->ptr, dir->len);
+    model->file_hash = dir_hash(dir);
 	gfx_read_scene(model, scene, model->file_hash);
     
 	// Compute the world-space bounding box

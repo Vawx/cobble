@@ -25,7 +25,7 @@ typedef struct component_t {
 #define COMPONENT_INITIAL_COUNT mega(1)// NOTE(Kyle): odds we actually use this much?
 typedef struct component_system_buffer_t {
     component_type type;
-    component_t *components;
+    component_t *ptr;
     u32 idx;
     u32 count;
 } component_system_buffer_t;

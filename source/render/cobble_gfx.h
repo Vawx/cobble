@@ -6,6 +6,7 @@
 
 typedef struct gfx_handle_t {
     u32 id;
+    void *src_buffer;
 } gfx_handle_t;
 
 typedef struct gfx_buffered_object_t {

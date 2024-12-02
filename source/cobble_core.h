@@ -46,14 +46,9 @@ static void core_init(void) {
     component_t *mesh = world_make_component(e, COMPONENT_TYPE_MESH);
     component_t *phys = world_make_component(e, COMPONENT_TYPE_PHYSICS);
     
-    dir_t dir = dir_get_for("cube.asset", SUBDIR_MESH);
+    dir_t dir = dir_get_for("sphere.fbx", SUBDIR_MESH);
     world_init_component_mesh(mesh, &dir);
     world_init_component_physics(phys);
-    
-    dir_t cube = dir_get_for("sphere.fbx", SUBDIR_MESH);
-    gfx_handle_t t = gfx_load_model_fbx(&cube);
-    
-    printf("");
 }
 
 #if _WIN32

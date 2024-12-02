@@ -7,7 +7,7 @@
 typedef struct mesh_vertex_t {
     vec3 position;
     vec3 normal;
-    vec3 uv;
+    vec2 uv;
     r32 f_vertex_index;
 } gfx_mesh_vertex_t;
 
