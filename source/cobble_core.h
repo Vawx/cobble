@@ -42,13 +42,17 @@ static void core_init(void) {
     
     world_init();
     
+#if 1 //ENTITY_EXAMPLE_MESH
     entity_t *e = world_make_entity();
     component_t *mesh = world_make_component(e, COMPONENT_TYPE_MESH);
-    component_t *phys = world_make_component(e, COMPONENT_TYPE_PHYSICS);
-    
     dir_t dir = dir_get_for("sphere.fbx", SUBDIR_MESH);
     world_init_component_mesh(mesh, &dir);
-    world_init_component_physics(phys);
+    
+    e = world_make_entity();
+    mesh = world_make_component(e, COMPONENT_TYPE_MESH);
+    world_init_component_mesh(mesh, &dir);
+    printf("");
+#endif
 }
 
 #if _WIN32

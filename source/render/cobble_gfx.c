@@ -145,7 +145,6 @@ static gfx_handle_t gfx_make_buffered_object(u32 vertex_size, u8 *vertices, u32 
     
     obj->file_hash = hash;
     obj->num_indices = num_indices;
-    
     gfx_handle_t result = {0};
     result.id = buffered_objects.idx - 1;
     return result;

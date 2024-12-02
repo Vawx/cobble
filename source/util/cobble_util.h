@@ -153,6 +153,14 @@ static void c_memcpy(void *dest, void *src, u32 size) {
     }
 }
 
+typedef struct ident_t {
+    u32 id; // unique id
+    u32 entity_id; // owner id
+    u8 type; // type of whatever
+} ident_t;
+
+#define IDENT_TYPE_CAST(ident, type) (type)ident.type
+
 // math types that are easier to assign and pass around
 // conversions to cglm below
 typedef union {

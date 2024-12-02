@@ -6,15 +6,14 @@
 
 typedef struct gfx_handle_t {
     u32 id;
-    void *src_buffer;
 } gfx_handle_t;
 
 typedef struct gfx_buffered_object_t {
     sg_buffer index;
     sg_buffer vertex;
     u32 num_indices;
-    
     u64 file_hash;
+    ident_t ident; // owning components entity id
 } gfx_buffered_object_t;
 
 #define BUFFERED_OBJECT_DEFAULT_COUNT kilo(1)

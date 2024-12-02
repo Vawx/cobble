@@ -9,8 +9,13 @@ typedef enum component_type {
     COMPONENT_TYPE_COUNT
 } component_type;
 
+static const char *component_type_str[COMPONENT_TYPE_COUNT] = {
+    "Mesh",
+    "Physics",
+};
+
 typedef struct component_t {
-    component_type type;
+    ident_t ident;
     union {
         struct {
             gfx_handle_t gfx_handle;
@@ -19,7 +24,6 @@ typedef struct component_t {
             JPH_BodyID *id;
         } physics;
     };
-    s32 entity_id; // owner id
 } component_t;
 
 #define COMPONENT_INITIAL_COUNT mega(1)// NOTE(Kyle): odds we actually use this much?
