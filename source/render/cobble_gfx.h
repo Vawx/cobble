@@ -13,7 +13,7 @@ typedef struct gfx_buffered_object_t {
     sg_buffer vertex;
     u32 num_indices;
     u64 file_hash;
-    ident_t ident; // owning components entity id
+    mat4 model_matrix;
 } gfx_buffered_object_t;
 
 #define BUFFERED_OBJECT_DEFAULT_COUNT kilo(1)
@@ -38,6 +38,7 @@ static void gfx_frame();
 static void gfx_shutdown();
 
 static gfx_handle_t gfx_make_buffered_object(u32 vertex_size, u8 *vertices, u32 index_size, u32 *indices, u64 hash, u32 num_indices);
+static void gfx_render_mesh(const gfx_handle_t *handle, mat4 model_matrix);
 
 #include "cobble_ufbx.h"
 

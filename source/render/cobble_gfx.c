@@ -5,6 +5,8 @@ static gfx_render_pass_t static_draw;
 static gfx_buffered_object_buffer_t buffered_objects;
 static gfx_buffered_object_buffer_t frame_buffered_objects;
 
+static ufbx_model_t_buffer_t model_buffer;
+
 static const char *DEFAULT_DIFFUSE_NAME = "default_diffuse.png";
 static sg_image default_image;
 static sg_sampler default_sampler;
@@ -101,7 +103,11 @@ static void gfx_frame() {
         mesh_vertex_ubo_t mesh_ubo = {0};
         glm_mat4_copy(ident, mesh_ubo.geometry_to_world);
         glm_mat4_copy(ident, mesh_ubo.normal_to_world);
-        glm_mat4_mul(proj, view, mesh_ubo.world_to_clip);
+        
+        MAT4(proj_view);
+        glm_mat4_mul(proj, view, proj_view);
+        glm_mat4_mul(proj_view, obj->model_matrix, mesh_ubo.world_to_clip);
+        
         mesh_ubo.f_num_blend_shapes = 0;
         sg_apply_uniforms(0, SG_RANGE_REF(mesh_ubo));
         
@@ -150,12 +156,21 @@ static gfx_handle_t gfx_make_buffered_object(u32 vertex_size, u8 *vertices, u32 
     return result;
 }
 
-static void gfx_render_mesh(const gfx_handle_t *handle) {
+static void gfx_render_mesh(const gfx_handle_t *handle, mat4 model_matrix) {
     c_assert(handle->id >= 0 && handle->id < buffered_objects.idx);
     
-    gfx_buffered_object_t *buffer = &buffered_objects.ptr[handle->id];
-    memcpy(&frame_buffered_objects.ptr[frame_buffered_objects.idx], buffer, sizeof(gfx_buffered_object_t));
-    ++frame_buffered_objects.idx;
+    ufbx_model_t *ptr = &model_buffer.ptr[handle->id];
+    for(s32 i = 0; i < ptr->num_meshes; ++i) {
+        ufbx_mesh_t *mesh = &ptr->meshes[i];
+        for(s32 j = 0; j < mesh->num_parts; ++j) {
+            ufbx_mesh_part_t *part = &mesh->parts[j];
+            
+            gfx_buffered_object_t *buffer = &buffered_objects.ptr[part->obj_handle.id];
+            glm_mat4_copy(model_matrix, buffer->model_matrix);
+            memcpy(&frame_buffered_objects.ptr[frame_buffered_objects.idx], buffer, sizeof(gfx_buffered_object_t));
+            ++frame_buffered_objects.idx;
+        }
+    }
 }
 
 #include "cobble_render_imgui.c"

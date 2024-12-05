@@ -1,6 +1,4 @@
 
-static ufbx_model_t_buffer_t model_buffer;
-
 static void ufbx_init() {
     model_buffer.ptr = (ufbx_model_t*)c_alloc(sizeof(ufbx_model_t) * UFBX_MODEL_DEFAULT_COUNT);
     model_buffer.count = UFBX_MODEL_DEFAULT_COUNT;
@@ -186,15 +184,18 @@ void gfx_read_scene(ufbx_model_t *vs, ufbx_scene *scene, u64 file_hash) {
 }
 
 static gfx_handle_t gfx_load_model_fbx(dir_t *dir) {
+    // check if already created
     u64 file_hash = dir_hash(dir);
     for(s32 i = 0; i < model_buffer.idx; ++i) {
         if(file_hash == model_buffer.ptr[i].file_hash) {
             gfx_handle_t handle = {0};
             handle.id = i;
-            return handle;
+            return handle; // found created, give that one back instead of loading it again.
+            // expected here that the model_buffer is initialized with sokol/gpu
         }
     }
     
+    // wasnt found, load it.
     c_assert(model_buffer.ptr != NULL);
     ufbx_model_t *model = &model_buffer.ptr[model_buffer.idx++]; // increment here
     c_assert(model_buffer.idx < model_buffer.count);
@@ -281,5 +282,6 @@ static gfx_handle_t gfx_load_model_fbx(dir_t *dir) {
 	ufbx_free_scene(scene);
     
     gfx_handle_t result = {0};
+    result.id = model_buffer.idx - 1;
     return result;
 }

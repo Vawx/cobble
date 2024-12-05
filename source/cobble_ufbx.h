@@ -12,7 +12,7 @@ typedef struct mesh_vertex_t {
 } gfx_mesh_vertex_t;
 
 typedef struct ufbx_mesh_part_t {
-    gfx_handle_t obj_handle;
+    gfx_handle_t obj_handle; // to the buffered object, in gfx
     u32 material_index;
 } ufbx_mesh_part_t;
 

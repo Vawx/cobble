@@ -51,7 +51,8 @@ static void core_init(void) {
     e = world_make_entity();
     mesh = world_make_component(e, COMPONENT_TYPE_MESH);
     world_init_component_mesh(mesh, &dir);
-    printf("");
+    
+    world_set_entity_pos(e, (vec3){0.f, 5.f, 0.f});
 #endif
 }
 
